@@ -1,6 +1,138 @@
 #include "pch.h"
 #include "VulkanRenderDevice.h"
 
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* layerPrefix, const char* message, void* userData)
+{
+	switch (flags)
+	{
+	case VK_DEBUG_REPORT_INFORMATION_BIT_EXT:
+		//Log(info) << "------DebugReport(Info)------" << std::endl;
+		//Log(info) << "ObjectType: " << objectType << std::endl;
+		//Log(info) << "Object: " << object << std::endl;
+		//Log(info) << "Location: " << location << std::endl;
+		//Log(info) << "MessageCode: " << messageCode << std::endl;
+		//Log(info) << "LayerPrefix: " << layerPrefix << std::endl;
+		//Log(info) << "Message: " << message << std::endl;
+		//Log(info) << "-----------------------------" << std::endl;
+		break;
+	case VK_DEBUG_REPORT_WARNING_BIT_EXT:
+/*		Log(warning) << "------DebugReport(Warn)------" << std::endl;
+		Log(warning) << "ObjectType: " << objectType << std::endl;
+		Log(warning) << "Object: " << object << std::endl;
+		Log(warning) << "Location: " << location << std::endl;
+		Log(warning) << "MessageCode: " << messageCode << std::endl;
+		Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(warning) << "Message: " << message << std::endl;
+		Log(warning) << "-----------------------------" << std::endl*/;
+		break;
+	case VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT:
+		//Log(warning) << "------DebugReport(Perf)------" << std::endl;
+		//Log(warning) << "ObjectType: " << objectType << std::endl;
+		//Log(warning) << "Object: " << object << std::endl;
+		//Log(warning) << "Location: " << location << std::endl;
+		//Log(warning) << "MessageCode: " << messageCode << std::endl;
+		//Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+		//Log(warning) << "Message: " << message << std::endl;
+		//Log(warning) << "-----------------------------" << std::endl;
+		break;
+	case VK_DEBUG_REPORT_ERROR_BIT_EXT:
+		//Log(error) << "------DebugReport(Error)------" << std::endl;
+		//Log(error) << "ObjectType: " << objectType << std::endl;
+		//Log(error) << "Object: " << object << std::endl;
+		//Log(error) << "Location: " << location << std::endl;
+		//Log(error) << "MessageCode: " << messageCode << std::endl;
+		//Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
+		//Log(error) << "Message: " << message << std::endl;
+		//Log(error) << "------------------------------" << std::endl;
+		break;
+	case VK_DEBUG_REPORT_DEBUG_BIT_EXT:
+		//Log(warning) << "------DebugReport(Debug)------" << std::endl;
+		//Log(warning) << "ObjectType: " << objectType << std::endl;
+		//Log(warning) << "Object: " << object << std::endl;
+		//Log(warning) << "Location: " << location << std::endl;
+		//Log(warning) << "MessageCode: " << messageCode << std::endl;
+		//Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+		//Log(warning) << "Message: " << message << std::endl;
+		//Log(warning) << "------------------------------" << std::endl;
+		break;
+	default:
+		//Log(error) << "------DebugReport(?)------" << std::endl;
+		//Log(error) << "ObjectType: " << objectType << std::endl;
+		//Log(error) << "Object: " << object << std::endl;
+		//Log(error) << "Location: " << location << std::endl;
+		//Log(error) << "MessageCode: " << messageCode << std::endl;
+		//Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
+		//Log(error) << "Message: " << message << std::endl;
+		//Log(error) << "--------------------------" << std::endl;
+		break;
+	}
+
+	return VK_FALSE;
+}
+
+VKAPI_ATTR VkResult VKAPI_CALL vkCreateDebugReportCallbackEXT(
+	VkInstance                                  instance,
+	const VkDebugReportCallbackCreateInfoEXT* pCreateInfo,
+	const VkAllocationCallbacks* pAllocator,
+	VkDebugReportCallbackEXT* pCallback)
+{
+	if (pfn_vkCreateDebugReportCallbackEXT == nullptr)
+	{
+		return VK_NOT_READY;
+	}
+
+	return pfn_vkCreateDebugReportCallbackEXT(
+		instance,
+		pCreateInfo,
+		pAllocator,
+		pCallback
+	);
+}
+
+VKAPI_ATTR void VKAPI_CALL vkDestroyDebugReportCallbackEXT(
+	VkInstance                                  instance,
+	VkDebugReportCallbackEXT                    callback,
+	const VkAllocationCallbacks* pAllocator)
+{
+	if (pfn_vkDestroyDebugReportCallbackEXT == nullptr)
+	{
+		return;
+	}
+
+	pfn_vkDestroyDebugReportCallbackEXT(
+		instance,
+		callback,
+		pAllocator
+	);
+}
+
+VKAPI_ATTR void VKAPI_CALL vkDebugReportMessageEXT(
+	VkInstance                                  instance,
+	VkDebugReportFlagsEXT                       flags,
+	VkDebugReportObjectTypeEXT                  objectType,
+	uint64_t                                    object,
+	size_t                                      location,
+	int32_t                                     messageCode,
+	const char* pLayerPrefix,
+	const char* pMessage)
+{
+	if (pfn_vkDebugReportMessageEXT == nullptr)
+	{
+		return;
+	}
+
+	pfn_vkDebugReportMessageEXT(
+		instance,
+		flags,
+		objectType,
+		object,
+		location,
+		messageCode,
+		pLayerPrefix,
+		pMessage
+	);
+}
+
 UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 

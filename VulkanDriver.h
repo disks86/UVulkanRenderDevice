@@ -1,7 +1,8 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN 
+//#define WIN32_LEAN_AND_MEAN 
 #include <windows.h>
+#include "atlstr.h"
 
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vk_sdk_platform.h>
