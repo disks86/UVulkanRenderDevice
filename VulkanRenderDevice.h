@@ -1,5 +1,6 @@
 #pragma once
 #include "VulkanDriver.h"
+#include "LogManager.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* layerPrefix, const char* message, void* userData);
 
@@ -27,9 +28,35 @@ VKAPI_ATTR void VKAPI_CALL vkDebugReportMessageEXT(
 	const char* pLayerPrefix,
 	const char* pMessage);
 
+static inline void LTrim(std::string& s)
+{
+	s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](int ch)
+		{
+			std::locale loc;
+			return !std::isspace(ch, loc);
+		}));
+}
+
+static inline void RTrim(std::string& s)
+{
+	s.erase(std::find_if(s.rbegin(), s.rend(), [](int ch)
+		{
+			std::locale loc;
+			return !std::isspace(ch, loc);
+		}).base(), s.end());
+}
+
+static inline void Trim(std::string& s)
+{
+	LTrim(s);
+	RTrim(s);
+}
+
 class VulkanRenderDevice
 	: public URenderDevice
 {
+public:
+	//RenderDevice Stuff
 	DECLARE_CLASS(VulkanRenderDevice, URenderDevice, CLASS_Config, VulkanDriver)
 	
 	UBOOL Init(UViewport*, INT, INT, INT, UBOOL);
@@ -48,5 +75,36 @@ class VulkanRenderDevice
 	void PopHit(INT, UBOOL);
 	void GetStats(TCHAR*);
 	void ReadPixels(FColor*);
+
+	//Vulkan
+	vk::UniqueInstance mInstance;
+	vk::UniqueDebugReportCallbackEXT mCallback;
+	std::vector<vk::PhysicalDevice> mPhysicalDevices;
+	size_t mPhysicalDeviceIndex;
+	vk::PhysicalDeviceProperties mPhysicalDeviceProperties;
+	vk::PhysicalDeviceMemoryProperties mPhysicalDeviceMemoryProperties;
+	std::vector<vk::QueueFamilyProperties> mQueueFamilyProperties;
+	size_t mGraphicsQueueFamilyIndex;
+	size_t mPresentQueueFamilyIndex;
+	vk::UniqueDevice mDevice;
+	vk::UniqueCommandPool mCommandPool;
+	vk::Queue mQueue;
+	vk::UniqueDescriptorPool mDescriptorPool;
+	vk::UniquePipelineCache mPipelineCache;
+	std::vector<vk::UniqueSemaphore> mImageAvailableSemaphores;
+	std::vector<vk::UniqueSemaphore> mRenderFinishedSemaphores;
+	std::vector<vk::UniqueCommandBuffer> mDrawCommandBuffers;
+	std::vector<vk::UniqueFence> mDrawFences;
+	uint32_t mFrameIndex = 0;
+	std::vector<vk::UniqueCommandBuffer> mUtilityCommandBuffers;
+	std::vector<vk::UniqueFence> mUtilityFences;
+	uint32_t mUtilityIndex = 0;
+
+	//Misc
+	std::map<std::string, std::string> mConfiguration;
+	void LoadConfiguration(std::string filename);
+
+	HWND mHWND;
+	HDC mHDC;
 };
 
