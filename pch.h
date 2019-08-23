@@ -27,6 +27,10 @@
 #include <algorithm>
 #include <memory>
 #include "framework.h"
+#ifndef VK_USE_PLATFORM_WIN32_KHR
+#define VK_USE_PLATFORM_WIN32_KHR
+#endif //VK_USE_PLATFORM_WIN32_KHR
+#include <vulkan/vulkan.h>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vk_sdk_platform.h>
 //#define UTGLR_NO_APP_MALLOC

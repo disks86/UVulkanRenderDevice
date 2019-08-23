@@ -280,7 +280,7 @@ UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT Ne
 		vk::SemaphoreCreateInfo semaphoreCreateInfo;
 		vk::FenceCreateInfo fenceCreateInfo(vk::FenceCreateFlagBits::eSignaled);
 
-		mDrawCommandBuffers = mDevice->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(mCommandPool.get(), vk::CommandBufferLevel::ePrimary, 2));
+		mDrawCommandBuffers = mDevice->allocateCommandBuffersUnique(vk::CommandBufferAllocateInfo(mCommandPool.get(), vk::CommandBufferLevel::ePrimary, 3));
 		for (int32_t i = 0; i < (int32_t)mDrawCommandBuffers.size(); i++)
 		{
 			mDrawFences.push_back(mDevice->createFenceUnique(fenceCreateInfo));
@@ -309,12 +309,186 @@ UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT Ne
 		}
 	}
 
+	//TODO: setup any initial render state.
+
 	return true;
 }
 
 UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
+	//Stash the input parameters for later use.
+	mNewX = NewX;
+	mNewY = NewY;
+	mNewColorBytes = NewColorBytes;
+	mFullscreen = Fullscreen;
 
+	//Destroy old surface if there is one.
+
+	//Get real viewport size
+	NewX = Viewport->SizeX;
+	NewY = Viewport->SizeY;
+
+	//Don't break editor and tiny windowed mode
+	if (NewX < 16) NewX = 16;
+	if (NewY < 16) NewY = 16;
+
+	//Setup surface and grab surface information.
+	{
+		auto const createInfo = vk::Win32SurfaceCreateInfoKHR().setHinstance(GetModuleHandle(nullptr)).setHwnd(mHWND);
+		mSurface = mInstance->createWin32SurfaceKHRUnique(createInfo);
+
+		mFormats = mPhysicalDevices[mPhysicalDeviceIndex].getSurfaceFormatsKHR(mSurface.get());
+		mSurfaceCapabilities = mPhysicalDevices[mPhysicalDeviceIndex].getSurfaceCapabilitiesKHR(mSurface.get());
+
+		if (mSurfaceCapabilities.currentExtent.width == std::numeric_limits<uint32_t>::max())
+		{
+			// If the surface size is undefined, the size is set to the size of the images requested.
+			mSwapchainExtent.width = std::clamp((uint32_t)NewX, mSurfaceCapabilities.minImageExtent.width, mSurfaceCapabilities.maxImageExtent.width);
+			mSwapchainExtent.height = std::clamp((uint32_t)NewY, mSurfaceCapabilities.minImageExtent.height, mSurfaceCapabilities.maxImageExtent.height);
+		}
+		else
+		{
+			// If the surface size is defined, the swap chain size must match
+			mSwapchainExtent = mSurfaceCapabilities.currentExtent;
+		}
+
+		//TODO: check formats.
+
+		mFormat = vk::Format::eB8G8R8A8Unorm;
+	}
+
+	/*
+	Now we need to figure out what presentation mode to use. We'll fall back to Fifo if there is nothing better.
+	Mailbox is prefered but immediate is second best.
+	If the parameters say to use V-Sync then just roll with FIFO regardless of what is available.
+	*/
+	mSwapchainPresentMode = vk::PresentModeKHR::eFifo;
+	if (!mConfiguration["VSync"].empty() && !std::stoi(mConfiguration["VSync"]))
+	{
+		auto presentModes = mPhysicalDevices[mPhysicalDeviceIndex].getSurfacePresentModesKHR(mSurface.get());
+		for (auto& presentMode : presentModes)
+		{
+			if (presentMode == vk::PresentModeKHR::eMailbox)
+			{
+				mSwapchainPresentMode = vk::PresentModeKHR::eMailbox;
+				break;
+			}
+			else if (presentMode == vk::PresentModeKHR::eImmediate)
+			{
+				mSwapchainPresentMode = vk::PresentModeKHR::eImmediate;
+			}
+		}
+	}
+
+	//If I need to handle seperate present and graphics queue then do that here.
+
+	//Setup swap chain, frame buffer, and render target
+	{
+		vk::SurfaceTransformFlagBitsKHR preTransform = (mSurfaceCapabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) ? vk::SurfaceTransformFlagBitsKHR::eIdentity : mSurfaceCapabilities.currentTransform;
+		vk::CompositeAlphaFlagBitsKHR compositeAlpha =
+			(mSurfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied) ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
+			(mSurfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePostMultiplied) ? vk::CompositeAlphaFlagBitsKHR::ePostMultiplied :
+			(mSurfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::eInherit) ? vk::CompositeAlphaFlagBitsKHR::eInherit : vk::CompositeAlphaFlagBitsKHR::eOpaque;
+		vk::SwapchainCreateInfoKHR swapChainCreateInfo(vk::SwapchainCreateFlagsKHR(), mSurface.get(), mSurfaceCapabilities.minImageCount, mFormat, vk::ColorSpaceKHR::eSrgbNonlinear,
+			mSwapchainExtent, 1, vk::ImageUsageFlagBits::eColorAttachment | vk::ImageUsageFlagBits::eTransferDst, vk::SharingMode::eExclusive, 0, nullptr, preTransform, compositeAlpha, mSwapchainPresentMode, true, nullptr);
+		mSwapChain = mDevice->createSwapchainKHRUnique(swapChainCreateInfo);
+		mSwapChainImages = mDevice->getSwapchainImagesKHR(mSwapChain.get());
+		mImageViews.reserve(mSwapChainImages.size());
+
+		for (auto image : mSwapChainImages)
+		{
+			vk::ComponentMapping componentMapping(vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eG, vk::ComponentSwizzle::eB, vk::ComponentSwizzle::eA);
+			vk::ImageSubresourceRange subResourceRange(vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1);
+			vk::ImageViewCreateInfo imageViewCreateInfo(vk::ImageViewCreateFlags(), image, vk::ImageViewType::e2D, mFormat, componentMapping, subResourceRange);
+			mImageViews.push_back(mDevice->createImageViewUnique(imageViewCreateInfo));
+		}
+	}
+
+	//Setup Depth Buffer
+	{
+		mDepthFormat = vk::Format::eD16Unorm;
+		vk::FormatProperties formatProperties = mPhysicalDevices[mPhysicalDeviceIndex].getFormatProperties(mDepthFormat);
+
+		vk::ImageTiling tiling;
+		if (formatProperties.linearTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
+		{
+			tiling = vk::ImageTiling::eLinear;
+		}
+		else if (formatProperties.optimalTilingFeatures & vk::FormatFeatureFlagBits::eDepthStencilAttachment)
+		{
+			tiling = vk::ImageTiling::eOptimal;
+		}
+		else
+		{
+			throw std::runtime_error("DepthStencilAttachment is not supported for D16Unorm depth format.");
+		}
+
+		vk::ImageCreateInfo imageCreateInfo(vk::ImageCreateFlags(), vk::ImageType::e2D, mDepthFormat, vk::Extent3D(mSwapchainExtent.width, mSwapchainExtent.height, 1), 1, 1, vk::SampleCountFlagBits::e1, tiling, vk::ImageUsageFlagBits::eDepthStencilAttachment);
+		mDepthImage = mDevice->createImageUnique(imageCreateInfo);
+
+		vk::PhysicalDeviceMemoryProperties memoryProperties = mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties();
+		vk::MemoryRequirements memoryRequirements = mDevice->getImageMemoryRequirements(mDepthImage.get());
+		uint32_t typeBits = memoryRequirements.memoryTypeBits;
+		uint32_t typeIndex = uint32_t(~0);
+		for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; i++)
+		{
+			if ((typeBits & 1) && ((memoryProperties.memoryTypes[i].propertyFlags & vk::MemoryPropertyFlagBits::eDeviceLocal) == vk::MemoryPropertyFlagBits::eDeviceLocal))
+			{
+				typeIndex = i;
+				break;
+			}
+			typeBits >>= 1;
+		}
+		assert(typeIndex != ~0);
+		mDepthMemory = mDevice->allocateMemoryUnique(vk::MemoryAllocateInfo(memoryRequirements.size, typeIndex));
+
+		mDevice->bindImageMemory(mDepthImage.get(), mDepthMemory.get(), 0);
+
+		vk::ComponentMapping componentMapping(vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eG, vk::ComponentSwizzle::eB, vk::ComponentSwizzle::eA);
+		vk::ImageSubresourceRange subResourceRange(vk::ImageAspectFlagBits::eDepth, 0, 1, 0, 1);
+		mDepthView = mDevice->createImageViewUnique(vk::ImageViewCreateInfo(vk::ImageViewCreateFlags(), mDepthImage.get(), vk::ImageViewType::e2D, mDepthFormat, componentMapping, subResourceRange));
+	}
+
+	//Setup Render pass and frame buffer.
+	{
+		vk::AttachmentDescription attachments[2];
+		attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+		attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+
+		vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
+		vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+		vk::SubpassDescription subpass(vk::SubpassDescriptionFlags(), vk::PipelineBindPoint::eGraphics, 0, nullptr, 1, &colorReference, nullptr, &depthReference);
+
+		mRenderPass = mDevice->createRenderPassUnique(vk::RenderPassCreateInfo(vk::RenderPassCreateFlags(), 2, attachments, 1, &subpass));
+
+		vk::ImageView frameAttachments[2];
+
+		vk::FramebufferCreateInfo framebufferCreateInfo;
+		framebufferCreateInfo.renderPass = mRenderPass.get();
+		framebufferCreateInfo.attachmentCount = 2;
+		framebufferCreateInfo.pAttachments = frameAttachments;
+		framebufferCreateInfo.width = mSwapchainExtent.width;
+		framebufferCreateInfo.height = mSwapchainExtent.height;
+		framebufferCreateInfo.layers = 1;
+
+		frameAttachments[1] = mDepthView.get();
+		for (auto& imageView : mImageViews)
+		{
+			frameAttachments[0] = imageView.get();
+			mFrameBuffers.push_back(mDevice->createFramebufferUnique(framebufferCreateInfo, nullptr));
+		}
+	}
+
+	//Setup viewport and scissor based on new size. (include half-pixel offset)
+	mScissor = vk::Rect2D(vk::Offset2D(0, 0),vk::Extent2D(mSwapchainExtent.width, mSwapchainExtent.height));
+
+	mViewport
+		.setX(0.0f - 0.5f)
+		.setY(static_cast<float>(mSwapchainExtent.height) - 0.5f)
+		.setWidth(static_cast<float>(mSwapchainExtent.width) - 0.5f)
+		.setHeight(-(static_cast<float>(mSwapchainExtent.height) - 0.5f))
+		.setMinDepth(0.0f)
+		.setMaxDepth(1.0f);
 }
 
 void VulkanRenderDevice::Exit(void)
@@ -342,7 +516,7 @@ void VulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Sur
 
 }
 
-void VulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, INT NumPts, DWORD PolyFlags, FSpanBuffer* Span)
+void VulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, int NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 
 }

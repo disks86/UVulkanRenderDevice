@@ -100,11 +100,39 @@ public:
 	std::vector<vk::UniqueFence> mUtilityFences;
 	uint32_t mUtilityIndex = 0;
 
+	//Vulkan Surface & Swap Chain
+	vk::UniqueSurfaceKHR mSurface;
+	std::vector<vk::SurfaceFormatKHR> mFormats;
+	vk::Format mFormat;
+	vk::SurfaceCapabilitiesKHR mSurfaceCapabilities;
+	VkExtent2D mSwapchainExtent;
+	vk::PresentModeKHR mSwapchainPresentMode;
+	vk::UniqueSwapchainKHR mSwapChain;
+	std::vector<vk::Image> mSwapChainImages; 
+	std::vector<vk::UniqueImageView> mImageViews;
+
+	//Vulkan Depth Buffer
+	vk::Format mDepthFormat;
+	vk::UniqueImage mDepthImage;
+	vk::UniqueDeviceMemory mDepthMemory;
+	vk::UniqueImageView mDepthView;
+
+	//Vulkan RenderPass, Framebuffer Scissor, and Viewport
+	vk::UniqueRenderPass mRenderPass;
+	std::vector <vk::UniqueFramebuffer> mFrameBuffers;
+	vk::Rect2D mScissor;
+	vk::Viewport mViewport;
+
 	//Misc
 	std::map<std::string, std::string> mConfiguration;
 	void LoadConfiguration(std::string filename);
 
 	HWND mHWND;
 	HDC mHDC;
+
+	INT mNewX;
+	INT mNewY;
+	INT mNewColorBytes;
+	UBOOL mFullscreen;
 };
 
