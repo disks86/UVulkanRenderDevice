@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "VulkanRenderDevice.h"
+#include "UVulkanRenderDevice.h"
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* layerPrefix, const char* message, void* userData)
 {
@@ -16,14 +16,14 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, 
 		Log(info) << "-----------------------------" << std::endl;
 		break;
 	case VK_DEBUG_REPORT_WARNING_BIT_EXT:
-				Log(warning) << "------DebugReport(Warn)------" << std::endl;
-				Log(warning) << "ObjectType: " << objectType << std::endl;
-				Log(warning) << "Object: " << object << std::endl;
-				Log(warning) << "Location: " << location << std::endl;
-				Log(warning) << "MessageCode: " << messageCode << std::endl;
-				Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
-				Log(warning) << "Message: " << message << std::endl;
-				Log(warning) << "-----------------------------" << std::endl;
+		Log(warning) << "------DebugReport(Warn)------" << std::endl;
+		Log(warning) << "ObjectType: " << objectType << std::endl;
+		Log(warning) << "Object: " << object << std::endl;
+		Log(warning) << "Location: " << location << std::endl;
+		Log(warning) << "MessageCode: " << messageCode << std::endl;
+		Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(warning) << "Message: " << message << std::endl;
+		Log(warning) << "-----------------------------" << std::endl;
 		break;
 	case VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT:
 		Log(warning) << "------DebugReport(Perf)------" << std::endl;
@@ -133,10 +133,22 @@ VKAPI_ATTR void VKAPI_CALL vkDebugReportMessageEXT(
 	);
 }
 
-UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
+IMPLEMENT_CLASS(UVulkanRenderDevice);
+
+UVulkanRenderDevice::UVulkanRenderDevice()
+{
+
+}
+
+void UVulkanRenderDevice::StaticConstructor()
+{
+
+}
+
+UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	//Setup Defaults;
-	mConfiguration["LogFile"] = "C:\VKUT99.log";
+	mConfiguration["LogFile"] = "C:\\VKUT99.log";
 	mConfiguration["VSync"] = "1";
 #ifdef _DEBUG
 	mConfiguration["LogLevel"] = "0";
@@ -314,7 +326,7 @@ UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT Ne
 	return true;
 }
 
-UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
+UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	//Stash the input parameters for later use.
 	mNewX = NewX;
@@ -493,17 +505,17 @@ UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fu
 	return true;
 }
 
-void VulkanRenderDevice::Exit(void)
+void UVulkanRenderDevice::Exit(void)
 {
 	//TODO: check to see if I really need to use this.
 }
 
-void VulkanRenderDevice::Flush(UBOOL AllowPrecache)
+void UVulkanRenderDevice::Flush(UBOOL AllowPrecache)
 {
 
 }
 
-void VulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
+void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
 	//TODO: Reset any stats or counters.
 
@@ -562,7 +574,7 @@ void VulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Scr
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 }
 
-void VulkanRenderDevice::Unlock(UBOOL Blit)
+void UVulkanRenderDevice::Unlock(UBOOL Blit)
 {
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 
@@ -606,32 +618,32 @@ void VulkanRenderDevice::Unlock(UBOOL Blit)
 	}
 }
 
-void VulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
+void UVulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
 {
 
 }
 
-void VulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, int NumPts, DWORD PolyFlags, FSpanBuffer* Span)
+void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, int NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 
 }
 
-void VulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags)
+void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags)
 {
 
 }
 
-void VulkanRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2)
+void UVulkanRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2)
 {
 
 }
 
-void VulkanRenderDevice::Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z)
+void UVulkanRenderDevice::Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z)
 {
 
 }
 
-void VulkanRenderDevice::ClearZ(FSceneNode* Frame)
+void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 {
 	//The depth is setup as clear in the render pass so just stop and start it. The Color is load/store so that should be safe.
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
@@ -639,27 +651,27 @@ void VulkanRenderDevice::ClearZ(FSceneNode* Frame)
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 }
 
-void VulkanRenderDevice::PushHit(const BYTE* Data, INT Count)
+void UVulkanRenderDevice::PushHit(const BYTE* Data, INT Count)
 {
 
 }
 
-void VulkanRenderDevice::PopHit(INT Count, UBOOL bForce)
+void UVulkanRenderDevice::PopHit(INT Count, UBOOL bForce)
 {
 
 }
 
-void VulkanRenderDevice::GetStats(TCHAR* Result)
+void UVulkanRenderDevice::GetStats(TCHAR* Result)
 {
 
 }
 
-void VulkanRenderDevice::ReadPixels(FColor* Pixels)
+void UVulkanRenderDevice::ReadPixels(FColor* Pixels)
 {
 
 }
 
-void VulkanRenderDevice::LoadConfiguration(std::string filename)
+void UVulkanRenderDevice::LoadConfiguration(std::string filename)
 {
 	std::string key;
 	std::string value;

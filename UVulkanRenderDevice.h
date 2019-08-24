@@ -52,13 +52,17 @@ static inline void Trim(std::string& s)
 	RTrim(s);
 }
 
-class VulkanRenderDevice
+class UVulkanRenderDevice
 	: public URenderDevice
 {
 public:
-	//RenderDevice Stuff
-	DECLARE_CLASS(VulkanRenderDevice, URenderDevice, CLASS_Config, VulkanDriver)
+
+	UVulkanRenderDevice();
+
+	DECLARE_CLASS(UVulkanRenderDevice, URenderDevice, CLASS_Config, VulkanDriver)
 	
+	void StaticConstructor();
+
 	UBOOL Init(UViewport*, INT, INT, INT, UBOOL);
 	UBOOL SetRes(INT, INT, INT, UBOOL);
 	void Exit(void);

@@ -24,10 +24,10 @@
     <ClInclude Include="VulkanDriver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="VulkanRenderDevice.h">
+    <ClInclude Include="LogManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="LogManager.h">
+    <ClInclude Include="UVulkanRenderDevice.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -38,14 +38,14 @@
     <ClCompile Include="VulkanDriver.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="VulkanRenderDevice.cpp">
+    <ClCompile Include="LogManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="LogManager.cpp">
+    <ClCompile Include="UVulkanRenderDevice.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="UVulkanRenderDevice.int" />
+    <CopyFileToFolders Include="VulkanDriver.int" />
   </ItemGroup>
 </Project>
