@@ -15,10 +15,6 @@
 #define MAX_DESCRIPTOR 2048u
 #endif // !MAX_DESCRIPTOR
 
-#ifndef _REALLY_WANT_DEBUG
-#define _REALLY_WANT_DEBUG
-#endif // !_REALLY_WANT_DEBUG
-
 //#define WIN32_LEAN_AND_MEAN 
 #include <windows.h>
 #include "atlstr.h"

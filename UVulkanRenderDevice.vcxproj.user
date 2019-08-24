@@ -3,4 +3,9 @@
   <PropertyGroup>
     <ShowAllFiles>false</ShowAllFiles>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LocalDebuggerCommand>C:\Program Files %28x86%29\Steam\steamapps\common\Unreal Tournament\System\UnrealTournament.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>..\..\Program Files %28x86%29\Steam\steamapps\common\Unreal Tournament\System</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+  </PropertyGroup>
 </Project>

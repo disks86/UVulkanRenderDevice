@@ -60,7 +60,7 @@ public:
 	UVulkanRenderDevice();
 
 	DECLARE_CLASS(UVulkanRenderDevice, URenderDevice, CLASS_Config, VulkanDriver)
-	
+
 	void StaticConstructor();
 
 	UBOOL Init(UViewport*, INT, INT, INT, UBOOL);
@@ -84,12 +84,12 @@ public:
 	vk::UniqueInstance mInstance;
 	vk::UniqueDebugReportCallbackEXT mCallback;
 	std::vector<vk::PhysicalDevice> mPhysicalDevices;
-	size_t mPhysicalDeviceIndex;
+	size_t mPhysicalDeviceIndex = 0;
 	vk::PhysicalDeviceProperties mPhysicalDeviceProperties;
 	vk::PhysicalDeviceMemoryProperties mPhysicalDeviceMemoryProperties;
 	std::vector<vk::QueueFamilyProperties> mQueueFamilyProperties;
-	size_t mGraphicsQueueFamilyIndex;
-	size_t mPresentQueueFamilyIndex;
+	size_t mGraphicsQueueFamilyIndex = 0;
+	size_t mPresentQueueFamilyIndex = 0;
 	vk::UniqueDevice mDevice;
 	vk::UniqueCommandPool mCommandPool;
 	vk::Queue mQueue;
@@ -107,16 +107,18 @@ public:
 	//Vulkan Surface & Swap Chain
 	vk::UniqueSurfaceKHR mSurface;
 	std::vector<vk::SurfaceFormatKHR> mFormats;
-	vk::Format mFormat;
+	vk::Format mFormat = vk::Format::eUndefined;
+	vk::ColorSpaceKHR mColorSpace = vk::ColorSpaceKHR::eSrgbNonlinear;
 	vk::SurfaceCapabilitiesKHR mSurfaceCapabilities;
-	VkExtent2D mSwapchainExtent;
-	vk::PresentModeKHR mSwapchainPresentMode;
+	VkExtent2D mSwapchainExtent = {};
+	vk::PresentModeKHR mSwapchainPresentMode = vk::PresentModeKHR::eFifo;
 	vk::UniqueSwapchainKHR mSwapChain;
-	std::vector<vk::Image> mSwapChainImages; 
+	std::vector<vk::Image> mSwapChainImages;
 	std::vector<vk::UniqueImageView> mImageViews;
+	vk::SwapchainCreateInfoKHR mSwapChainCreateInfo;
 
 	//Vulkan Depth Buffer
-	vk::Format mDepthFormat;
+	vk::Format mDepthFormat = vk::Format::eUndefined;
 	vk::UniqueImage mDepthImage;
 	vk::UniqueDeviceMemory mDepthMemory;
 	vk::UniqueImageView mDepthView;
@@ -124,22 +126,21 @@ public:
 	//Vulkan RenderPass, Framebuffer Scissor, and Viewport
 	vk::UniqueRenderPass mRenderPass;
 	std::vector <vk::UniqueFramebuffer> mFrameBuffers;
-	vk::Rect2D mScissor;
-	vk::Viewport mViewport;
-	uint32_t mImageIndex;
+	vk::Rect2D mScissor = {};
+	vk::Viewport mViewport = {};
+	uint32_t mImageIndex = 0;
 	vk::ClearValue mClearValues[2] = {};
-	vk::RenderPassBeginInfo mRenderPassBeginInfo;
+	vk::RenderPassBeginInfo mRenderPassBeginInfo = {};
 
 	//Misc
-	std::map<std::string, std::string> mConfiguration;
 	void LoadConfiguration(std::string filename);
 
-	HWND mHWND;
-	HDC mHDC;
-
-	INT mNewX;
-	INT mNewY;
-	INT mNewColorBytes;
-	UBOOL mFullscreen;
+	HWND mHWND = 0;
+	HDC mHDC = 0;
+	HINSTANCE mHINSTANCE = 0;
+	INT mNewX = 0;
+	INT mNewY = 0;
+	INT mNewColorBytes = 0;
+	UBOOL mFullscreen = 0;
 };
 
