@@ -1,0 +1,9 @@
+[Public]
+Object=(Name=VulkanDriver.VulkanRenderDevice,Class=Class,MetaClass=Engine.RenderDevice,Autodetect=)
+Preferences=(Caption="Rendering",Parent="Advanced Options")
+Preferences=(Caption="Vulkan support",Parent="Rendering",Class=VulkanDriver.VulkanRenderDevice,Immediate=True)
+
+[VulkanRenderDevice]
+ClassCaption="Vulkan Support"
+AskInstalled=Do you have Vulkan installed?
+AskUse=Do you want to use Vulkan?

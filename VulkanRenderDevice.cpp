@@ -6,64 +6,64 @@ VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, 
 	switch (flags)
 	{
 	case VK_DEBUG_REPORT_INFORMATION_BIT_EXT:
-		//Log(info) << "------DebugReport(Info)------" << std::endl;
-		//Log(info) << "ObjectType: " << objectType << std::endl;
-		//Log(info) << "Object: " << object << std::endl;
-		//Log(info) << "Location: " << location << std::endl;
-		//Log(info) << "MessageCode: " << messageCode << std::endl;
-		//Log(info) << "LayerPrefix: " << layerPrefix << std::endl;
-		//Log(info) << "Message: " << message << std::endl;
-		//Log(info) << "-----------------------------" << std::endl;
+		Log(info) << "------DebugReport(Info)------" << std::endl;
+		Log(info) << "ObjectType: " << objectType << std::endl;
+		Log(info) << "Object: " << object << std::endl;
+		Log(info) << "Location: " << location << std::endl;
+		Log(info) << "MessageCode: " << messageCode << std::endl;
+		Log(info) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(info) << "Message: " << message << std::endl;
+		Log(info) << "-----------------------------" << std::endl;
 		break;
 	case VK_DEBUG_REPORT_WARNING_BIT_EXT:
-/*		Log(warning) << "------DebugReport(Warn)------" << std::endl;
+				Log(warning) << "------DebugReport(Warn)------" << std::endl;
+				Log(warning) << "ObjectType: " << objectType << std::endl;
+				Log(warning) << "Object: " << object << std::endl;
+				Log(warning) << "Location: " << location << std::endl;
+				Log(warning) << "MessageCode: " << messageCode << std::endl;
+				Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+				Log(warning) << "Message: " << message << std::endl;
+				Log(warning) << "-----------------------------" << std::endl;
+		break;
+	case VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT:
+		Log(warning) << "------DebugReport(Perf)------" << std::endl;
 		Log(warning) << "ObjectType: " << objectType << std::endl;
 		Log(warning) << "Object: " << object << std::endl;
 		Log(warning) << "Location: " << location << std::endl;
 		Log(warning) << "MessageCode: " << messageCode << std::endl;
 		Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
 		Log(warning) << "Message: " << message << std::endl;
-		Log(warning) << "-----------------------------" << std::endl*/;
-		break;
-	case VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT:
-		//Log(warning) << "------DebugReport(Perf)------" << std::endl;
-		//Log(warning) << "ObjectType: " << objectType << std::endl;
-		//Log(warning) << "Object: " << object << std::endl;
-		//Log(warning) << "Location: " << location << std::endl;
-		//Log(warning) << "MessageCode: " << messageCode << std::endl;
-		//Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
-		//Log(warning) << "Message: " << message << std::endl;
-		//Log(warning) << "-----------------------------" << std::endl;
+		Log(warning) << "-----------------------------" << std::endl;
 		break;
 	case VK_DEBUG_REPORT_ERROR_BIT_EXT:
-		//Log(error) << "------DebugReport(Error)------" << std::endl;
-		//Log(error) << "ObjectType: " << objectType << std::endl;
-		//Log(error) << "Object: " << object << std::endl;
-		//Log(error) << "Location: " << location << std::endl;
-		//Log(error) << "MessageCode: " << messageCode << std::endl;
-		//Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
-		//Log(error) << "Message: " << message << std::endl;
-		//Log(error) << "------------------------------" << std::endl;
+		Log(error) << "------DebugReport(Error)------" << std::endl;
+		Log(error) << "ObjectType: " << objectType << std::endl;
+		Log(error) << "Object: " << object << std::endl;
+		Log(error) << "Location: " << location << std::endl;
+		Log(error) << "MessageCode: " << messageCode << std::endl;
+		Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(error) << "Message: " << message << std::endl;
+		Log(error) << "------------------------------" << std::endl;
 		break;
 	case VK_DEBUG_REPORT_DEBUG_BIT_EXT:
-		//Log(warning) << "------DebugReport(Debug)------" << std::endl;
-		//Log(warning) << "ObjectType: " << objectType << std::endl;
-		//Log(warning) << "Object: " << object << std::endl;
-		//Log(warning) << "Location: " << location << std::endl;
-		//Log(warning) << "MessageCode: " << messageCode << std::endl;
-		//Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
-		//Log(warning) << "Message: " << message << std::endl;
-		//Log(warning) << "------------------------------" << std::endl;
+		Log(warning) << "------DebugReport(Debug)------" << std::endl;
+		Log(warning) << "ObjectType: " << objectType << std::endl;
+		Log(warning) << "Object: " << object << std::endl;
+		Log(warning) << "Location: " << location << std::endl;
+		Log(warning) << "MessageCode: " << messageCode << std::endl;
+		Log(warning) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(warning) << "Message: " << message << std::endl;
+		Log(warning) << "------------------------------" << std::endl;
 		break;
 	default:
-		//Log(error) << "------DebugReport(?)------" << std::endl;
-		//Log(error) << "ObjectType: " << objectType << std::endl;
-		//Log(error) << "Object: " << object << std::endl;
-		//Log(error) << "Location: " << location << std::endl;
-		//Log(error) << "MessageCode: " << messageCode << std::endl;
-		//Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
-		//Log(error) << "Message: " << message << std::endl;
-		//Log(error) << "--------------------------" << std::endl;
+		Log(error) << "------DebugReport(?)------" << std::endl;
+		Log(error) << "ObjectType: " << objectType << std::endl;
+		Log(error) << "Object: " << object << std::endl;
+		Log(error) << "Location: " << location << std::endl;
+		Log(error) << "MessageCode: " << messageCode << std::endl;
+		Log(error) << "LayerPrefix: " << layerPrefix << std::endl;
+		Log(error) << "Message: " << message << std::endl;
+		Log(error) << "--------------------------" << std::endl;
 		break;
 	}
 
@@ -136,7 +136,7 @@ VKAPI_ATTR void VKAPI_CALL vkDebugReportMessageEXT(
 UBOOL VulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	//Setup Defaults;
-	mConfiguration["LogFile"] = "VKUT99.log";
+	mConfiguration["LogFile"] = "C:\VKUT99.log";
 	mConfiguration["VSync"] = "1";
 #ifdef _DEBUG
 	mConfiguration["LogLevel"] = "0";
@@ -452,7 +452,7 @@ UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fu
 	//Setup Render pass and frame buffer.
 	{
 		vk::AttachmentDescription attachments[2];
-		attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
+		attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
 		attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
 		vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
@@ -480,7 +480,7 @@ UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fu
 	}
 
 	//Setup viewport and scissor based on new size. (include half-pixel offset)
-	mScissor = vk::Rect2D(vk::Offset2D(0, 0),vk::Extent2D(mSwapchainExtent.width, mSwapchainExtent.height));
+	mScissor = vk::Rect2D(vk::Offset2D(0, 0), vk::Extent2D(mSwapchainExtent.width, mSwapchainExtent.height));
 
 	mViewport
 		.setX(0.0f - 0.5f)
@@ -489,11 +489,13 @@ UBOOL VulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fu
 		.setHeight(-(static_cast<float>(mSwapchainExtent.height) - 0.5f))
 		.setMinDepth(0.0f)
 		.setMaxDepth(1.0f);
+
+	return true;
 }
 
 void VulkanRenderDevice::Exit(void)
 {
-
+	//TODO: check to see if I really need to use this.
 }
 
 void VulkanRenderDevice::Flush(UBOOL AllowPrecache)
@@ -503,12 +505,105 @@ void VulkanRenderDevice::Flush(UBOOL AllowPrecache)
 
 void VulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane ScreenClear, DWORD RenderLockFlags, BYTE* InHitData, INT* InHitSize)
 {
+	//TODO: Reset any stats or counters.
 
+	mFrameIndex = (mFrameIndex++) % mSwapChainImages.size();
+	mDevice->waitForFences(1, &mDrawFences[mFrameIndex].get(), VK_TRUE, UINT64_MAX);
+	mDevice->resetFences(1, &mDrawFences[mFrameIndex].get());
+
+	mDevice->acquireNextImageKHR(mSwapChain.get(), UINT64_MAX, mImageAvailableSemaphores[mFrameIndex].get(), vk::Fence(), &mImageIndex);
+
+	vk::ImageMemoryBarrier prePresentBarrier;
+	prePresentBarrier.srcAccessMask = vk::AccessFlags();
+	prePresentBarrier.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
+	prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	commandBuffer.begin(&beginInfo);
+
+	const std::array<float, 4> colorValues = { ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W };
+	mClearValues[0].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
+	mClearValues[1].color = vk::ClearColorValue(colorValues);
+
+	//Always clear z but only clear color if LOCKR_ClearScreen is set.
+	if (RenderLockFlags & LOCKR_ClearScreen)
+	{
+		prePresentBarrier.image = mSwapChainImages[mImageIndex];
+		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
+		prePresentBarrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+
+		vk::ImageSubresourceRange subResourceRange;
+		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
+		subResourceRange.baseMipLevel = 0;
+		subResourceRange.levelCount = 1;
+		subResourceRange.baseArrayLayer = 0;
+		subResourceRange.layerCount = 1;
+		commandBuffer.clearColorImage(mSwapChainImages[mImageIndex], vk::ImageLayout::eTransferDstOptimal, &mClearValues[0].color, 1, &subResourceRange);
+
+		prePresentBarrier.image = mSwapChainImages[mImageIndex];
+		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+	}
+
+	//Start the render pass so the worker rendering will end up in our framebuffer.
+	mRenderPassBeginInfo.renderPass = mRenderPass.get();
+	mRenderPassBeginInfo.framebuffer = mFrameBuffers[mFrameIndex].get();
+	mRenderPassBeginInfo.renderArea.offset.x = 0;
+	mRenderPassBeginInfo.renderArea.offset.y = 0;
+	mRenderPassBeginInfo.renderArea.extent.width = mSwapchainExtent.width;
+	mRenderPassBeginInfo.renderArea.extent.height = mSwapchainExtent.height;
+	mRenderPassBeginInfo.clearValueCount = 1;
+	mRenderPassBeginInfo.pClearValues = mClearValues;
+	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 }
 
 void VulkanRenderDevice::Unlock(UBOOL Blit)
 {
-	//Present happens here.
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
+	commandBuffer.endRenderPass();
+
+	vk::ImageMemoryBarrier prePresentBarrier;
+	prePresentBarrier.srcAccessMask = vk::AccessFlags();
+	prePresentBarrier.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
+	prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+	prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 };
+	prePresentBarrier.image = mSwapChainImages[mImageIndex];
+	prePresentBarrier.oldLayout = vk::ImageLayout::eColorAttachmentOptimal;
+	prePresentBarrier.newLayout = vk::ImageLayout::ePresentSrcKHR;
+	commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+
+	commandBuffer.end();
+
+	//Now that we have the work all bundled up we need to submit it to the
+	vk::PipelineStageFlags pipelineFlag[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
+	vk::SubmitInfo submitInfo;
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = &mImageAvailableSemaphores[mFrameIndex].get();
+	submitInfo.pWaitDstStageMask = pipelineFlag;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = &mRenderFinishedSemaphores[mFrameIndex].get();
+	mQueue.submit(1, &submitInfo, mDrawFences[mFrameIndex].get());
+
+	//Take the swap chain image and display it to the screen.
+	if (Blit)
+	{
+		vk::PresentInfoKHR presentInfo;
+		presentInfo.waitSemaphoreCount = 1;
+		presentInfo.pWaitSemaphores = &mRenderFinishedSemaphores[mFrameIndex].get();
+		presentInfo.swapchainCount = 1;
+		presentInfo.pSwapchains = &mSwapChain.get();
+		presentInfo.pImageIndices = &mImageIndex;
+		mQueue.presentKHR(&presentInfo);
+	}
 }
 
 void VulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
@@ -538,7 +633,10 @@ void VulkanRenderDevice::Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD Line
 
 void VulkanRenderDevice::ClearZ(FSceneNode* Frame)
 {
-
+	//The depth is setup as clear in the render pass so just stop and start it. The Color is load/store so that should be safe.
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+	commandBuffer.endRenderPass();
+	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 }
 
 void VulkanRenderDevice::PushHit(const BYTE* Data, INT Count)

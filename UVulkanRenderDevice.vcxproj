@@ -188,6 +188,13 @@
     <ClCompile Include="VulkanRenderDevice.cpp" />
     <ClCompile Include="VulkanDriver.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <CopyFileToFolders Include="UVulkanRenderDevice.int">
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</DeploymentContent>
+      <FileType>Document</FileType>
+      <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</DeploymentContent>
+    </CopyFileToFolders>
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

@@ -122,6 +122,9 @@ public:
 	std::vector <vk::UniqueFramebuffer> mFrameBuffers;
 	vk::Rect2D mScissor;
 	vk::Viewport mViewport;
+	uint32_t mImageIndex;
+	vk::ClearValue mClearValues[2] = {};
+	vk::RenderPassBeginInfo mRenderPassBeginInfo;
 
 	//Misc
 	std::map<std::string, std::string> mConfiguration;
