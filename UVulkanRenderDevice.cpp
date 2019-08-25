@@ -165,9 +165,10 @@ void UVulkanRenderDevice::StaticConstructor()
 
 UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
-	guard(UVulkanRenderDevice::Init);
-
+	BOOL canPresent = false;
 	bool enableDebugLayers = true;
+
+	guard(UVulkanRenderDevice::Init);
 
 	//Figure out what layers and extensions to enable.
 	{
@@ -331,20 +332,39 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		Viewport = InViewport;
 
 		mHWND = (HWND)InViewport->GetWindow();
+		check(mHWND);
 		mHDC = GetDC(mHWND);
+		check(mHDC);
 		mHINSTANCE = GetModuleHandle(nullptr);
-		if (!SetRes(NewX, NewY, NewColorBytes, Fullscreen))
+		check(mHINSTANCE);
+
+		//Window is only passed in on init so we can assume the same window for this device.
+		auto const createInfo = vk::Win32SurfaceCreateInfoKHR()
+			.setHinstance(mHINSTANCE)
+			.setHwnd(mHWND);
+		mSurface = mInstance->createWin32SurfaceKHRUnique(createInfo);
+
+		canPresent = mPhysicalDevices[mPhysicalDeviceIndex].getSurfaceSupportKHR(mGraphicsQueueFamilyIndex, mSurface.get());
+		if (canPresent)
+		{
+			if (!SetRes(NewX, NewY, NewColorBytes, Fullscreen))
+			{
+				Exit();
+				return false;
+			}
+		}
+		else
 		{
 			Exit();
-			return false;
+			//Return will happen anyway.
 		}
 	}
 
-	//TODO: setup any initial render state.
+	Log(info) << "SurfaceSupportKHR: " << canPresent << std::endl;
 
 	unguard;
 
-	return true;
+	return canPresent;
 }
 
 UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
@@ -362,13 +382,15 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	Log(info) << "NewColorBytes: " << NewColorBytes << std::endl;
 	Log(info) << "Fullscreen: " << Fullscreen << std::endl;
 
-	//TODO: Destroy old surface stuff if there is any.
+	//Destroy old surface info if there is any.
+	mFrameBuffers.clear();
+	mRenderPass.reset(vk::RenderPass());
+	mImageViews.clear();
+	mSwapChainImages.clear();
+	mSwapChain.reset(vk::SwapchainKHR());
+	mFormats.clear();
 
-	//Setup surface and grab surface information.
-
-	auto const createInfo = vk::Win32SurfaceCreateInfoKHR().setHinstance(mHINSTANCE).setHwnd(mHWND);
-	mSurface = mInstance->createWin32SurfaceKHRUnique(createInfo);
-
+	//Grab surface information.
 	mFormats = mPhysicalDevices[mPhysicalDeviceIndex].getSurfaceFormatsKHR(mSurface.get());
 	mFormat = mFormats[0].format;
 	mColorSpace = mFormats[0].colorSpace;
@@ -433,7 +455,6 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	//If I need to handle seperate present and graphics queue then do that here.
 
 	//Setup swap chain, frame buffer, and render target
-
 	const vk::SurfaceTransformFlagBitsKHR preTransform = (mSurfaceCapabilities.supportedTransforms & vk::SurfaceTransformFlagBitsKHR::eIdentity) ? vk::SurfaceTransformFlagBitsKHR::eIdentity : mSurfaceCapabilities.currentTransform;
 	const vk::CompositeAlphaFlagBitsKHR compositeAlpha =
 		(mSurfaceCapabilities.supportedCompositeAlpha & vk::CompositeAlphaFlagBitsKHR::ePreMultiplied) ? vk::CompositeAlphaFlagBitsKHR::ePreMultiplied :
@@ -600,8 +621,8 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	commandBuffer.begin(&beginInfo);
 
 	const std::array<float, 4> colorValues = { ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W };
-	mClearValues[0].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
-	mClearValues[1].color = vk::ClearColorValue(colorValues);
+	mClearValues[0].color = vk::ClearColorValue(colorValues);
+	mClearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
 
 	//Always clear z but only clear color if LOCKR_ClearScreen is set.
 	if (RenderLockFlags & LOCKR_ClearScreen)
@@ -632,7 +653,7 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	mRenderPassBeginInfo.renderArea.offset.y = 0;
 	mRenderPassBeginInfo.renderArea.extent.width = mSwapchainExtent.width;
 	mRenderPassBeginInfo.renderArea.extent.height = mSwapchainExtent.height;
-	mRenderPassBeginInfo.clearValueCount = 1;
+	mRenderPassBeginInfo.clearValueCount = 2;
 	mRenderPassBeginInfo.pClearValues = mClearValues;
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 

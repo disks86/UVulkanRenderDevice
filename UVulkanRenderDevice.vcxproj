@@ -147,7 +147,7 @@
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExceptionHandling>Async</ExceptionHandling>
       <FloatingPointModel>Fast</FloatingPointModel>
-      <StructMemberAlignment>4Bytes</StructMemberAlignment>
+      <StructMemberAlignment>Default</StructMemberAlignment>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <TreatWChar_tAsBuiltInType>false</TreatWChar_tAsBuiltInType>
       <WholeProgramOptimization>false</WholeProgramOptimization>
