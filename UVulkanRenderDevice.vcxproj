@@ -170,6 +170,10 @@
       <RandomizedBaseAddress>false</RandomizedBaseAddress>
       <DataExecutionPrevention />
     </Link>
+    <PreBuildEvent>
+      <Command>"$(VK_SDK_PATH)\Bin32\glslc.exe" -mfmt=c -o "$(ProjectDir)\DefaultRenderingState.vert.h" "$(ProjectDir)\DefaultRenderingState.vert"
+"$(VK_SDK_PATH)\Bin32\glslc.exe" -mfmt=c -o "$(ProjectDir)\DefaultRenderingState.frag.h" "$(ProjectDir)\DefaultRenderingState.frag"</Command>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -219,6 +223,10 @@
       <FileType>Document</FileType>
       <DeploymentContent Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">true</DeploymentContent>
     </CopyFileToFolders>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DefaultRenderingState.frag" />
+    <None Include="DefaultRenderingState.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

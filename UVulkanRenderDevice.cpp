@@ -135,6 +135,14 @@ VKAPI_ATTR void VKAPI_CALL vkDebugReportMessageEXT(
 	);
 }
 
+const uint32_t DEFAULT_RENDERING_STATE_VERT[] =
+#include "DefaultRenderingState.vert.h"
+;
+
+const uint32_t DEFAULT_RENDERING_STATE_FRAG[] =
+#include "DefaultRenderingState.frag.h"
+;
+
 //I can use the element count to switch between zero, single, double, tripple, and quad texture.
 const vk::VertexInputAttributeDescription gStandardVertexInputAttributeDescription[6] =
 {
@@ -150,11 +158,11 @@ const vk::VertexInputAttributeDescription gTwoColorVertexInputAttributeDescripti
 {
 	vk::VertexInputAttributeDescription(0U,0U,vk::Format::eR32G32B32Sfloat,0),
 	vk::VertexInputAttributeDescription(1U,0U,vk::Format::eR32G32B32A32Sfloat,12),
-	vk::VertexInputAttributeDescription(1U,1U,vk::Format::eR32G32B32A32Sfloat,0),
-	vk::VertexInputAttributeDescription(2U,2U,vk::Format::eR32G32Sfloat,0),
-	vk::VertexInputAttributeDescription(3U,3U,vk::Format::eR32G32Sfloat,0),
-	vk::VertexInputAttributeDescription(4U,4U,vk::Format::eR32G32Sfloat,0),
-	vk::VertexInputAttributeDescription(5U,5U,vk::Format::eR32G32Sfloat,0)
+	vk::VertexInputAttributeDescription(2U,1U,vk::Format::eR32G32B32A32Sfloat,0),
+	vk::VertexInputAttributeDescription(3U,2U,vk::Format::eR32G32Sfloat,0),
+	vk::VertexInputAttributeDescription(4U,3U,vk::Format::eR32G32Sfloat,0),
+	vk::VertexInputAttributeDescription(5U,4U,vk::Format::eR32G32Sfloat,0),
+	vk::VertexInputAttributeDescription(6U,5U,vk::Format::eR32G32Sfloat,0)
 };
 
 IMPLEMENT_CLASS(UVulkanRenderDevice);

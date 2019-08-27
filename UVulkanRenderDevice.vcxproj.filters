@@ -13,6 +13,9 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{c25315fe-afe5-4f01-a6ce-592dfa0ca593}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="framework.h">
@@ -47,5 +50,13 @@
   </ItemGroup>
   <ItemGroup>
     <CopyFileToFolders Include="VulkanDriver.int" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="DefaultRenderingState.vert">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="DefaultRenderingState.frag">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
