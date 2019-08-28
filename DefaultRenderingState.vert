@@ -15,7 +15,7 @@ out gl_PerVertex
         vec4 gl_Position;
 };
 
-struct GlobalConstants
+struct VertexGlobalConstants
 {
 	mat4 ProjectionMatrix;
 	vec2 XAxis;
@@ -42,7 +42,7 @@ struct GlobalConstants
 
 layout(std430,binding = 0) uniform RenderStateBlock
 {
-	GlobalConstants globalConstants;
+	VertexGlobalConstants globalConstants;
 };
 
 void main() 

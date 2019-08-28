@@ -251,39 +251,45 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 	}
 
 	//Grab the physical devices so we can figure out which one to use.
-	mPhysicalDevices = mInstance->enumeratePhysicalDevices();
-	mPhysicalDeviceIndex = 0;
+	{
+		mPhysicalDevices = mInstance->enumeratePhysicalDevices();
+		mPhysicalDeviceIndex = 0;
+	}
 
 	//Count VRAM to try to to guess the most powerful GPU.
-	vk::DeviceSize largestSize = 0;
-	for (int32_t i = 0; i < (int32_t)mPhysicalDevices.size(); i++)
 	{
-		vk::PhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
-		mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties(&physicalDeviceMemoryProperties);
-		vk::DeviceSize size = 0;
-		for (int32_t j = 0; j < (int32_t)physicalDeviceMemoryProperties.memoryHeapCount; j++)
+		vk::DeviceSize largestSize = 0;
+		for (int32_t i = 0; i < (int32_t)mPhysicalDevices.size(); i++)
 		{
-			size += physicalDeviceMemoryProperties.memoryHeaps[j].size;
-		}
-		if (size > largestSize)
-		{
-			mPhysicalDeviceIndex = i;
+			vk::PhysicalDeviceMemoryProperties physicalDeviceMemoryProperties;
+			mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties(&physicalDeviceMemoryProperties);
+			vk::DeviceSize size = 0;
+			for (int32_t j = 0; j < (int32_t)physicalDeviceMemoryProperties.memoryHeapCount; j++)
+			{
+				size += physicalDeviceMemoryProperties.memoryHeaps[j].size;
+			}
+			if (size > largestSize)
+			{
+				mPhysicalDeviceIndex = i;
+			}
 		}
 	}
 
 	//Grab the properties for GetAdapterIdentifier and other calls.
-	mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties(&mPhysicalDeviceMemoryProperties);
-	mPhysicalDevices[mPhysicalDeviceIndex].getProperties(&mPhysicalDeviceProperties);
+	{
+		mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties(&mPhysicalDeviceMemoryProperties);
+		mPhysicalDevices[mPhysicalDeviceIndex].getProperties(&mPhysicalDeviceProperties);
 
-	Log(info) << "DeviceName: " << mPhysicalDeviceProperties.deviceName << std::endl;
-	Log(info) << "APIVersion: " << mPhysicalDeviceProperties.apiVersion << std::endl;
-	Log(info) << "DriverVersion: " << mPhysicalDeviceProperties.driverVersion << std::endl;
-	Log(info) << "VendorId: " << mPhysicalDeviceProperties.vendorID << std::endl;
-	Log(info) << "PhysicalDeviceIndex: " << mPhysicalDeviceIndex << std::endl;
+		Log(info) << "DeviceName: " << mPhysicalDeviceProperties.deviceName << std::endl;
+		Log(info) << "APIVersion: " << mPhysicalDeviceProperties.apiVersion << std::endl;
+		Log(info) << "DriverVersion: " << mPhysicalDeviceProperties.driverVersion << std::endl;
+		Log(info) << "VendorId: " << mPhysicalDeviceProperties.vendorID << std::endl;
+		Log(info) << "PhysicalDeviceIndex: " << mPhysicalDeviceIndex << std::endl;
 
-	//Look for a queue that supports graphics
-	mQueueFamilyProperties = mPhysicalDevices[mPhysicalDeviceIndex].getQueueFamilyProperties();
-	mGraphicsQueueFamilyIndex = std::distance(mQueueFamilyProperties.begin(), std::find_if(mQueueFamilyProperties.begin(), mQueueFamilyProperties.end(), [](vk::QueueFamilyProperties const& qfp) { return qfp.queueFlags & vk::QueueFlagBits::eGraphics; }));
+		//Look for a queue that supports graphics
+		mQueueFamilyProperties = mPhysicalDevices[mPhysicalDeviceIndex].getQueueFamilyProperties();
+		mGraphicsQueueFamilyIndex = std::distance(mQueueFamilyProperties.begin(), std::find_if(mQueueFamilyProperties.begin(), mQueueFamilyProperties.end(), [](vk::QueueFamilyProperties const& qfp) { return qfp.queueFlags & vk::QueueFlagBits::eGraphics; }));
+	}
 
 	//Create a device and command pool (unique device will auto destroy)
 	{
@@ -353,6 +359,190 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		{
 			mUtilityFences.push_back(mDevice->createFenceUnique(fenceCreateInfo));
 		}
+	}
+
+	//Create Descriptor layout.
+	const uint32_t textureCount = 4;
+	{
+		const vk::DescriptorSetLayoutBinding layoutBindings[3] =
+		{
+			vk::DescriptorSetLayoutBinding()
+				.setBinding(0)
+				.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+				.setDescriptorCount(1)
+				.setStageFlags(vk::ShaderStageFlagBits::eVertex)
+				.setPImmutableSamplers(nullptr),
+			vk::DescriptorSetLayoutBinding()
+				.setBinding(1)
+				.setDescriptorType(vk::DescriptorType::eUniformBuffer)
+				.setDescriptorCount(1)
+				.setStageFlags(vk::ShaderStageFlagBits::eFragment)
+				.setPImmutableSamplers(nullptr),
+			vk::DescriptorSetLayoutBinding()
+				.setBinding(2)
+				.setDescriptorType(vk::DescriptorType::eCombinedImageSampler)
+				.setDescriptorCount(textureCount)
+				.setStageFlags(vk::ShaderStageFlagBits::eFragment)
+				.setPImmutableSamplers(nullptr),
+		};
+		auto const descriptorLayout = vk::DescriptorSetLayoutCreateInfo().setBindingCount(3).setPBindings(layoutBindings);
+		mDescriptorLayout = mDevice->createDescriptorSetLayoutUnique(descriptorLayout);
+	}
+
+	//Create Pipeline layout.
+	{
+		//std::array<vk::PushConstantRange, 1> ranges =
+		//{
+		//	vk::PushConstantRange
+		//	{
+		//		vk::ShaderStageFlagBits::eVertex,
+		//		0,
+		//		sizeof(uint32_t) * 4
+		//	}
+		//};
+
+		//TODO: look into optimizations using push constants and/or specialization constants.
+
+		auto const pipelineLayoutCreateInfo = vk::PipelineLayoutCreateInfo()
+			.setSetLayoutCount(1)
+			//.setPPushConstantRanges(ranges.data())
+			//.setPushConstantRangeCount(1)
+			.setPSetLayouts(&mDescriptorLayout.get());
+		mPipelineLayout = mDevice->createPipelineLayoutUnique(pipelineLayoutCreateInfo);
+	}
+
+	//Create Color1Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mColor1Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mColor1Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mColor1BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mColor1Buffer.get(), mColor1BufferMemory.get(), 0);
+	}
+
+	//Create Color2Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mColor2Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mColor2Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mColor2BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mColor2Buffer.get(), mColor2BufferMemory.get(), 0);
+	}
+
+	//Create Texcoord1Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mTexcoord1Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mTexcoord1Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mTexcoord1BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mTexcoord1Buffer.get(), mTexcoord1BufferMemory.get(), 0);
+	}
+
+	//Create Texcoord2Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mTexcoord2Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mTexcoord2Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mTexcoord2BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mTexcoord2Buffer.get(), mTexcoord2BufferMemory.get(), 0);
+	}
+
+	//Create Texcoord3Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mTexcoord3Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mTexcoord3Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mTexcoord3BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mTexcoord3Buffer.get(), mTexcoord3BufferMemory.get(), 0);
+	}
+
+	//Create Texcoord4Buffer
+	{
+		auto const upVertexBufferInfo = vk::BufferCreateInfo().setSize(MAX_BUFFERUPDATE).setUsage(vk::BufferUsageFlagBits::eVertexBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mTexcoord4Buffer = mDevice->createBufferUnique(upVertexBufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mTexcoord4Buffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mTexcoord4BufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mTexcoord4Buffer.get(), mTexcoord4BufferMemory.get(), 0);
+	}
+
+	//Create VertexUniformBuffer
+	{
+		auto const bufferInfo = vk::BufferCreateInfo().setSize(sizeof(VertexGlobalConstants)).setUsage(vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mVertexConstantBuffer = mDevice->createBufferUnique(bufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mVertexConstantBuffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mVertexConstantBufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mVertexConstantBuffer.get(), mVertexConstantBufferMemory.get(), 0);
+	}
+
+	//Create FragmentUniformBuffer
+	{
+		auto const bufferInfo = vk::BufferCreateInfo().setSize(sizeof(FragmentGlobalConstants)).setUsage(vk::BufferUsageFlagBits::eUniformBuffer | vk::BufferUsageFlagBits::eTransferDst);
+		mFragmentConstantBuffer = mDevice->createBufferUnique(bufferInfo);
+		vk::MemoryRequirements mem_reqs;
+		mDevice->getBufferMemoryRequirements(mFragmentConstantBuffer.get(), &mem_reqs);
+		auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+		FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal, &mem_alloc.memoryTypeIndex);
+		mFragmentConstantBufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+		mDevice->bindBufferMemory(mFragmentConstantBuffer.get(), mFragmentConstantBufferMemory.get(), 0);
+	}
+
+	//Setup descriptor write structures
+	{
+		//Vertex Constants
+		mDescriptorBufferInfo[0].buffer = mVertexConstantBuffer.get();
+		mDescriptorBufferInfo[0].offset = 0;
+		mDescriptorBufferInfo[0].range = sizeof(mVertexGlobalConstants);
+
+		mWriteDescriptorSet[0].dstBinding = 0;
+		mWriteDescriptorSet[0].dstArrayElement = 0;
+		mWriteDescriptorSet[0].descriptorType = vk::DescriptorType::eUniformBuffer;
+		mWriteDescriptorSet[0].descriptorCount = 1;
+		mWriteDescriptorSet[0].pBufferInfo = &mDescriptorBufferInfo[0];
+
+		//Fragment Constants
+		mDescriptorBufferInfo[1].buffer = mFragmentConstantBuffer.get();
+		mDescriptorBufferInfo[1].offset = 0;
+		mDescriptorBufferInfo[1].range = sizeof(mFragmentGlobalConstants);
+
+		mWriteDescriptorSet[1].dstBinding = 1;
+		mWriteDescriptorSet[1].dstArrayElement = 0;
+		mWriteDescriptorSet[1].descriptorType = vk::DescriptorType::eUniformBuffer;
+		mWriteDescriptorSet[1].descriptorCount = 1;
+		mWriteDescriptorSet[1].pBufferInfo = &mDescriptorBufferInfo[1];
+
+		//Image
+		mWriteDescriptorSet[2].dstBinding = 2;
+		mWriteDescriptorSet[2].dstArrayElement = 0;
+		mWriteDescriptorSet[2].descriptorType = vk::DescriptorType::eCombinedImageSampler;
+		mWriteDescriptorSet[2].descriptorCount = textureCount;
+		mWriteDescriptorSet[2].pImageInfo = mDescriptorImageInfo;
+	}
+
+	//Load Shaders
+	{
+		mDefaultRenderingStateVertex = LoadShaderFromConst(DEFAULT_RENDERING_STATE_VERT);
+		mDefaultRenderingStateFragment = LoadShaderFromConst(DEFAULT_RENDERING_STATE_FRAG);
 	}
 
 	//TODO: setup remaining rendering structures.
@@ -650,6 +840,9 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	commandBuffer.begin(&beginInfo);
 
+	commandBuffer.setScissor(0, 1, &mScissor);
+	commandBuffer.setViewport(0, 1, &mViewport);
+
 	const std::array<float, 4> colorValues = { ScreenClear.X, ScreenClear.Y, ScreenClear.Z, ScreenClear.W };
 	mClearValues[0].color = vk::ClearColorValue(colorValues);
 	mClearValues[1].depthStencil = vk::ClearDepthStencilValue(1.0f, 0);
@@ -811,6 +1004,27 @@ void UVulkanRenderDevice::ReadPixels(FColor* Pixels)
 	guard(UVulkanRenderDevice::ReadPixels);
 	Log(info) << "UVulkanRenderDevice::ReadPixels" << std::endl;
 	unguard;
+}
+
+bool UVulkanRenderDevice::FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex)
+{
+	// Search memtypes to find first index with those properties
+	for (uint32_t i = 0; i < VK_MAX_MEMORY_TYPES; i++)
+	{
+		if ((typeBits & 1) == 1)
+		{
+			// Type is available, does it match user properties?
+			if ((mPhysicalDeviceMemoryProperties.memoryTypes[i].propertyFlags & requirements_mask) == requirements_mask)
+			{
+				*typeIndex = i;
+				return true;
+			}
+		}
+		typeBits >>= 1;
+	}
+
+	// No memory types matched, return failure
+	return false;
 }
 
 void UVulkanRenderDevice::LoadConfiguration(std::string filename)

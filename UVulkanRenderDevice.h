@@ -52,6 +52,39 @@ static inline void Trim(std::string& s)
 	RTrim(s);
 }
 
+struct VertexGlobalConstants
+{
+	glm::mat4 ProjectionMatrix;
+	glm::vec2 XAxis;
+	glm::vec2 UDot;
+	glm::vec2 YAxis;
+	glm::vec2 VDot;
+	float Upan1;
+	float VPan1;
+	float UMult1;
+	float VMult1;
+	float Upan2;
+	float VPan2;
+	float UMult2;
+	float VMult2;
+	float Upan3;
+	float VPan3;
+	float UMult3;
+	float VMult3;
+	float Upan4;
+	float VPan4;
+	float UMult4;
+	float VMult4;
+};
+
+struct FragmentGlobalConstants
+{
+	float AlphaTestLevel;
+	float Unused1;
+	float Unused2;
+	float LightmapBlendScaleFactor;
+};
+
 class UVulkanRenderDevice
 	: public URenderDevice
 {
@@ -103,6 +136,11 @@ public:
 	std::vector<vk::UniqueCommandBuffer> mUtilityCommandBuffers;
 	std::vector<vk::UniqueFence> mUtilityFences;
 	uint32_t mUtilityIndex = 0;
+	vk::UniqueDescriptorSetLayout mDescriptorLayout;
+	vk::UniquePipelineLayout mPipelineLayout;
+	vk::DescriptorBufferInfo mDescriptorBufferInfo[3];
+	vk::WriteDescriptorSet mWriteDescriptorSet[3];
+	vk::DescriptorImageInfo mDescriptorImageInfo[4];
 
 	//Vulkan Surface & Swap Chain
 	vk::UniqueSurfaceKHR mSurface;
@@ -131,6 +169,40 @@ public:
 	uint32_t mImageIndex = 0;
 	vk::ClearValue mClearValues[2] = {};
 	vk::RenderPassBeginInfo mRenderPassBeginInfo = {};
+
+	//Vulkan Buffers
+	vk::UniqueBuffer mColor1Buffer;
+	vk::UniqueDeviceMemory mColor1BufferMemory;
+	vk::UniqueBuffer mColor2Buffer;
+	vk::UniqueDeviceMemory mColor2BufferMemory;
+	vk::UniqueBuffer mTexcoord1Buffer;
+	vk::UniqueDeviceMemory mTexcoord1BufferMemory;
+	vk::UniqueBuffer mTexcoord2Buffer;
+	vk::UniqueDeviceMemory mTexcoord2BufferMemory;
+	vk::UniqueBuffer mTexcoord3Buffer;
+	vk::UniqueDeviceMemory mTexcoord3BufferMemory;
+	vk::UniqueBuffer mTexcoord4Buffer;
+	vk::UniqueDeviceMemory mTexcoord4BufferMemory;
+	vk::UniqueBuffer mVertexConstantBuffer;
+	vk::UniqueDeviceMemory mVertexConstantBufferMemory;
+	vk::UniqueBuffer mFragmentConstantBuffer;
+	vk::UniqueDeviceMemory mFragmentConstantBufferMemory;
+
+	VertexGlobalConstants mVertexGlobalConstants = {};
+	FragmentGlobalConstants mFragmentGlobalConstants = {};
+
+	//Vulkan Shaders
+	template < typename T, int32_t arraySize>
+	vk::UniqueShaderModule LoadShaderFromConst(const T(&data)[arraySize])
+	{
+		const vk::ShaderModuleCreateInfo moduleCreateInfo(vk::ShaderModuleCreateFlags(), arraySize * sizeof(T), (const uint32_t*)data);
+		return mDevice->createShaderModuleUnique(moduleCreateInfo);
+	}
+
+	vk::UniqueShaderModule mDefaultRenderingStateVertex;
+	vk::UniqueShaderModule mDefaultRenderingStateFragment;
+
+	bool FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex);
 
 	//Misc
 	void LoadConfiguration(std::string filename);

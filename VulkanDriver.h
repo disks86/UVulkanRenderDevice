@@ -8,6 +8,10 @@
 #define MAX_DESCRIPTOR 2048u
 #endif // !MAX_DESCRIPTOR
 
+#ifndef MAX_BUFFERUPDATE
+#define MAX_BUFFERUPDATE 65536u
+#endif // !MAX_BUFFERUPDATE
+
 //#define WIN32_LEAN_AND_MEAN 
 #include <windows.h>
 #include "atlstr.h"
@@ -25,6 +29,7 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan.hpp>
 #include <vulkan/vk_sdk_platform.h>
+#include <glm/glm.hpp>
 //#define UTGLR_NO_APP_MALLOC
 #include <stdlib.h>
 #include "Engine.h"

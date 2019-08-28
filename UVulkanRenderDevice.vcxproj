@@ -143,7 +143,7 @@
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;WIN32;UNICODE;NO_UNICODE_OS_SUPPORT;WIN32_LEAN_AND_MEAN;_SECURE_SCL=0;UTGLR_UT_BUILD;UVULKANRENDERDEVICE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
-      <AdditionalIncludeDirectories>C:\Source\UnrealTournament\Core\Inc;$(VULKAN_SDK)\Include;C:\Source\UnrealTournament\Engine\Inc\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Source\UnrealTournament\Core\Inc;$(VULKAN_SDK)\Third-Party\Include\;$(VULKAN_SDK)\Include\;C:\Source\UnrealTournament\Engine\Inc\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExceptionHandling>Async</ExceptionHandling>
       <FloatingPointModel>Fast</FloatingPointModel>

@@ -8,7 +8,7 @@ layout (location = 1) in vec2 texcoord1In;
 
 layout (location = 0) out vec4 uFragColor;
 
-struct GlobalConstants
+struct FragmentGlobalConstants
 {
 	float AlphaTestLevel;
 	float Unused1;
@@ -16,13 +16,13 @@ struct GlobalConstants
 	float LightmapBlendScaleFactor;
 };
 
-layout(std430,binding = 0) uniform RenderStateBlock
+layout(std430,binding = 1) uniform RenderStateBlock
 {
-	GlobalConstants globalConstants;
+	FragmentGlobalConstants globalConstants;
 };
 
 
-layout(binding = 1) uniform sampler2D textures[4];
+layout(binding = 2) uniform sampler2D textures[4];
 
 void main() 
 {
