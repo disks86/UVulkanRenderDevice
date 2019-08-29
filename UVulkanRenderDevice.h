@@ -85,6 +85,17 @@ struct FragmentGlobalConstants
 	float LightmapBlendScaleFactor;
 };
 
+struct CachedTexture
+{
+	vk::UniqueImage mImage;
+	vk::UniqueDeviceMemory mImageDeviceMemory;
+	vk::UniqueImageView mImageView;
+
+	uint32_t mWidth = 0;
+	uint32_t mHeight = 0;
+	uint32_t mMipMapCount = 0;
+};
+
 class UVulkanRenderDevice
 	: public URenderDevice
 {
@@ -191,6 +202,8 @@ public:
 	VertexGlobalConstants mVertexGlobalConstants = {};
 	FragmentGlobalConstants mFragmentGlobalConstants = {};
 
+	std::map<QWORD, std::shared_ptr<CachedTexture> > mCachedTextures;
+
 	//Vulkan Shaders
 	template < typename T, int32_t arraySize>
 	vk::UniqueShaderModule LoadShaderFromConst(const T(&data)[arraySize])
@@ -203,6 +216,7 @@ public:
 	vk::UniqueShaderModule mDefaultRenderingStateFragment;
 
 	bool FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex);
+	void BindTexture(uint32_t index, FTextureInfo& Info, DWORD PolyFlags);
 
 	//Misc
 	void LoadConfiguration(std::string filename);

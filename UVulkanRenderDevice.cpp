@@ -195,6 +195,10 @@ void UVulkanRenderDevice::StaticConstructor()
 
 UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
+	//UT flags
+	SupportsTC = false;
+
+	//Start Vulkan
 	BOOL canPresent = false;
 	bool enableDebugLayers = true;
 
@@ -948,6 +952,9 @@ void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& In
 void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags)
 {
 	guard(UVulkanRenderDevice::DrawTile);
+
+	BindTexture(0, Info, PolyFlags);
+
 	Log(info) << "UVulkanRenderDevice::DrawTile" << std::endl;
 	unguard;
 }
@@ -1025,6 +1032,77 @@ bool UVulkanRenderDevice::FindMemoryTypeFromProperties(uint32_t typeBits, vk::Me
 
 	// No memory types matched, return failure
 	return false;
+}
+
+void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD PolyFlags)
+{
+	std::shared_ptr<CachedTexture> cachedTexture;
+
+	QWORD cacheId = Info.CacheID;
+
+	auto it = mCachedTextures.find(cacheId);
+	if (it != mCachedTextures.end())
+	{
+		cachedTexture = it->second;
+	}
+	else
+	{
+		cachedTexture = std::make_shared<CachedTexture>();
+		mCachedTextures[cacheId] = cachedTexture;
+
+		cachedTexture->mWidth = 1 << Info.Mips[0]->UBits;
+		cachedTexture->mHeight = 1 << Info.Mips[0]->VBits;
+		cachedTexture->mMipMapCount = Info.NumMips;
+
+		const vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
+		const vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+		const vk::MemoryPropertyFlags required_props = vk::MemoryPropertyFlagBits::eDeviceLocal;
+
+		const vk::ImageCreateInfo imageCreateInfo = vk::ImageCreateInfo()
+			.setImageType(vk::ImageType::e2D)
+			.setFormat(vk::Format::eUndefined) //TODO: handle format translation.
+			.setExtent({ cachedTexture->mWidth, cachedTexture->mHeight, 1 })
+			.setMipLevels(cachedTexture->mMipMapCount)
+			.setArrayLayers(1)
+			.setSamples(vk::SampleCountFlagBits::e1)
+			.setTiling(tiling)
+			.setUsage(usage)
+			.setSharingMode(vk::SharingMode::eExclusive)
+			.setQueueFamilyIndexCount(0)
+			.setPQueueFamilyIndices(nullptr)
+			.setInitialLayout(vk::ImageLayout::ePreinitialized);
+		cachedTexture->mImage = mDevice->createImageUnique(imageCreateInfo);
+
+		vk::MemoryRequirements memoryRequirements;
+		mDevice->getImageMemoryRequirements(cachedTexture->mImage.get(), &memoryRequirements);
+
+		vk::MemoryAllocateInfo imageMemoryAllocateInfo = vk::MemoryAllocateInfo()
+			.setAllocationSize(memoryRequirements.size)
+			.setMemoryTypeIndex(0);
+
+		auto pass = FindMemoryTypeFromProperties(memoryRequirements.memoryTypeBits, required_props, &imageMemoryAllocateInfo.memoryTypeIndex);
+
+		cachedTexture->mImageDeviceMemory = mDevice->allocateMemoryUnique(imageMemoryAllocateInfo);
+
+		mDevice->bindImageMemory(cachedTexture->mImage.get(), cachedTexture->mImageDeviceMemory.get(), 0);
+
+		vk::ComponentMapping componentMapping;
+
+		auto const viewInfo = vk::ImageViewCreateInfo()
+			.setImage(cachedTexture->mImage.get())
+			.setViewType(vk::ImageViewType::e2D)
+			.setFormat(vk::Format::eUndefined) //TODO: handle format translation.
+			.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, Info.NumMips, 0, 1))
+			.setComponents(componentMapping);
+		cachedTexture->mImageView = mDevice->createImageViewUnique(viewInfo);
+	}
+
+	//TODO: handle sampler.
+
+	mDescriptorImageInfo[index].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+	mDescriptorImageInfo[index].sampler = vk::Sampler();
+	mDescriptorImageInfo[index].imageView = cachedTexture->mImageView.get();
+
 }
 
 void UVulkanRenderDevice::LoadConfiguration(std::string filename)
