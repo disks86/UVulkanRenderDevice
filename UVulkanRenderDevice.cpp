@@ -1050,51 +1050,106 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 		cachedTexture = std::make_shared<CachedTexture>();
 		mCachedTextures[cacheId] = cachedTexture;
 
+		//Figure out Image information
 		cachedTexture->mWidth = 1 << Info.Mips[0]->UBits;
 		cachedTexture->mHeight = 1 << Info.Mips[0]->VBits;
 		cachedTexture->mMipMapCount = Info.NumMips;
 
-		const vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
-		const vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
-		const vk::MemoryPropertyFlags required_props = vk::MemoryPropertyFlagBits::eDeviceLocal;
-
-		const vk::ImageCreateInfo imageCreateInfo = vk::ImageCreateInfo()
-			.setImageType(vk::ImageType::e2D)
-			.setFormat(vk::Format::eUndefined) //TODO: handle format translation.
-			.setExtent({ cachedTexture->mWidth, cachedTexture->mHeight, 1 })
-			.setMipLevels(cachedTexture->mMipMapCount)
-			.setArrayLayers(1)
-			.setSamples(vk::SampleCountFlagBits::e1)
-			.setTiling(tiling)
-			.setUsage(usage)
-			.setSharingMode(vk::SharingMode::eExclusive)
-			.setQueueFamilyIndexCount(0)
-			.setPQueueFamilyIndices(nullptr)
-			.setInitialLayout(vk::ImageLayout::ePreinitialized);
-		cachedTexture->mImage = mDevice->createImageUnique(imageCreateInfo);
-
-		vk::MemoryRequirements memoryRequirements;
-		mDevice->getImageMemoryRequirements(cachedTexture->mImage.get(), &memoryRequirements);
-
-		vk::MemoryAllocateInfo imageMemoryAllocateInfo = vk::MemoryAllocateInfo()
-			.setAllocationSize(memoryRequirements.size)
-			.setMemoryTypeIndex(0);
-
-		auto pass = FindMemoryTypeFromProperties(memoryRequirements.memoryTypeBits, required_props, &imageMemoryAllocateInfo.memoryTypeIndex);
-
-		cachedTexture->mImageDeviceMemory = mDevice->allocateMemoryUnique(imageMemoryAllocateInfo);
-
-		mDevice->bindImageMemory(cachedTexture->mImage.get(), cachedTexture->mImageDeviceMemory.get(), 0);
-
 		vk::ComponentMapping componentMapping;
 
-		auto const viewInfo = vk::ImageViewCreateInfo()
-			.setImage(cachedTexture->mImage.get())
-			.setViewType(vk::ImageViewType::e2D)
-			.setFormat(vk::Format::eUndefined) //TODO: handle format translation.
-			.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, Info.NumMips, 0, 1))
-			.setComponents(componentMapping);
-		cachedTexture->mImageView = mDevice->createImageViewUnique(viewInfo);
+		switch (Info.Format)
+		{
+		case TEXF_P8:
+			cachedTexture->mFormat = vk::Format::eR8Unorm;
+			componentMapping = vk::ComponentMapping(vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eR, vk::ComponentSwizzle::eOne);
+			break;
+		case TEXF_RGBA7:
+			cachedTexture->mFormat = vk::Format::eBc7UnormBlock; //Double check mapping.
+			break;
+		case TEXF_RGB16:
+			cachedTexture->mFormat = vk::Format::eR16G16B16Unorm;
+			break;
+		case TEXF_DXT1:
+			if (!(PolyFlags & PF_Masked))
+			{
+				cachedTexture->mFormat = vk::Format::eBc3UnormBlock;
+			}
+			else
+			{
+				cachedTexture->mFormat = vk::Format::eBc1RgbUnormBlock;
+			}
+			break;
+		case TEXF_RGB8:
+			cachedTexture->mFormat = vk::Format::eR8G8B8Unorm;
+			break;
+		case TEXF_RGBA8:
+			cachedTexture->mFormat = vk::Format::eR8G8B8A8Unorm;
+			break;
+		default:
+			cachedTexture->mFormat = vk::Format::eR8G8B8A8Unorm;
+			break;
+		}
+
+		//Setup Image and View
+		{
+			const vk::ImageTiling tiling = vk::ImageTiling::eOptimal;
+			const vk::ImageUsageFlags usage = vk::ImageUsageFlagBits::eSampled | vk::ImageUsageFlagBits::eTransferDst;
+			const vk::MemoryPropertyFlags required_props = vk::MemoryPropertyFlagBits::eDeviceLocal;
+
+			const vk::ImageCreateInfo imageCreateInfo = vk::ImageCreateInfo()
+				.setImageType(vk::ImageType::e2D)
+				.setFormat(cachedTexture->mFormat) //TODO: handle format translation.
+				.setExtent({ cachedTexture->mWidth, cachedTexture->mHeight, 1 })
+				.setMipLevels(cachedTexture->mMipMapCount)
+				.setArrayLayers(1)
+				.setSamples(vk::SampleCountFlagBits::e1)
+				.setTiling(tiling)
+				.setUsage(usage)
+				.setSharingMode(vk::SharingMode::eExclusive)
+				.setQueueFamilyIndexCount(0)
+				.setPQueueFamilyIndices(nullptr)
+				.setInitialLayout(vk::ImageLayout::ePreinitialized);
+			cachedTexture->mImage = mDevice->createImageUnique(imageCreateInfo);
+
+			vk::MemoryRequirements memoryRequirements;
+			mDevice->getImageMemoryRequirements(cachedTexture->mImage.get(), &memoryRequirements);
+
+			vk::MemoryAllocateInfo imageMemoryAllocateInfo = vk::MemoryAllocateInfo()
+				.setAllocationSize(memoryRequirements.size)
+				.setMemoryTypeIndex(0);
+
+			auto pass = FindMemoryTypeFromProperties(memoryRequirements.memoryTypeBits, required_props, &imageMemoryAllocateInfo.memoryTypeIndex);
+
+			cachedTexture->mImageDeviceMemory = mDevice->allocateMemoryUnique(imageMemoryAllocateInfo);
+
+			mDevice->bindImageMemory(cachedTexture->mImage.get(), cachedTexture->mImageDeviceMemory.get(), 0);
+
+			auto const viewInfo = vk::ImageViewCreateInfo()
+				.setImage(cachedTexture->mImage.get())
+				.setViewType(vk::ImageViewType::e2D)
+				.setFormat(cachedTexture->mFormat)
+				.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, Info.NumMips, 0, 1))
+				.setComponents(componentMapping);
+			cachedTexture->mImageView = mDevice->createImageViewUnique(viewInfo);
+		}
+
+		//Create staging buffer.
+		{
+			const uint32_t size = cachedTexture->mWidth * cachedTexture->mHeight * SizeOf(cachedTexture->mFormat);
+			auto const bufferInfo = vk::BufferCreateInfo().setSize((vk::DeviceSize)size).setUsage(vk::BufferUsageFlagBits::eTransferSrc);
+
+			cachedTexture->mStagingBuffer = mDevice->createBufferUnique(bufferInfo);
+
+			vk::MemoryRequirements mem_reqs;
+			mDevice->getBufferMemoryRequirements(cachedTexture->mStagingBuffer.get(), &mem_reqs);
+
+			auto mem_alloc = vk::MemoryAllocateInfo().setAllocationSize(mem_reqs.size).setMemoryTypeIndex(0);
+			FindMemoryTypeFromProperties(mem_reqs.memoryTypeBits, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, &mem_alloc.memoryTypeIndex);
+
+			cachedTexture->mStagingBufferMemory = mDevice->allocateMemoryUnique(mem_alloc);
+
+			mDevice->bindBufferMemory(cachedTexture->mStagingBuffer.get(), cachedTexture->mStagingBufferMemory.get(), 0);
+		}
 	}
 
 	//TODO: handle sampler.
