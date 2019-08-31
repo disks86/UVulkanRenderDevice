@@ -190,6 +190,11 @@ void UVulkanRenderDevice::StaticConstructor()
 	//Setup Logging.
 	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)std::stoi(mConfiguration["LogLevel"]));
 
+#define CPP_PROPERTY_LOCAL(_name) _name, CPP_PROPERTY(_name)
+#define CPP_PROPERTY_LOCAL_DCV(_name) DCV._name, CPP_PROPERTY(DCV._name)
+
+	AddFloatConfigParam(TEXT("LODBias"), CPP_PROPERTY_LOCAL(LODBias), 0.0f);
+
 	unguard;
 }
 
@@ -1150,6 +1155,25 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 
 			mDevice->bindBufferMemory(cachedTexture->mStagingBuffer.get(), cachedTexture->mStagingBufferMemory.get(), 0);
 		}
+		{
+			const vk::SamplerCreateInfo samplerCreateInfo = vk::SamplerCreateInfo()
+				.setMagFilter(vk::Filter::eNearest)
+				.setMinFilter(vk::Filter::eNearest)
+				.setAddressModeU(vk::SamplerAddressMode::eRepeat)
+				.setAddressModeV(vk::SamplerAddressMode::eRepeat)
+				.setAddressModeW(vk::SamplerAddressMode::eRepeat)
+				.setMipmapMode(vk::SamplerMipmapMode::eNearest)
+				.setMipLodBias(LODBias)
+				.setBorderColor(vk::BorderColor::eFloatOpaqueWhite)
+				.setUnnormalizedCoordinates(VK_FALSE)
+				.setCompareOp(vk::CompareOp::eNever)
+				.setMinLod(0.0f)
+				.setMaxLod(0.0f);
+
+			//TODO: handle anisotropy
+
+			cachedTexture->mSampler = mDevice->createSamplerUnique(samplerCreateInfo);
+		}
 	}
 
 	//TODO: handle sampler.
@@ -1158,6 +1182,12 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 	mDescriptorImageInfo[index].sampler = vk::Sampler();
 	mDescriptorImageInfo[index].imageView = cachedTexture->mImageView.get();
 
+}
+
+void UVulkanRenderDevice::AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue)
+{
+	param = defaultValue;
+	new(GetClass(), pName, RF_Public)UFloatProperty(EC_CppProperty, InOffset, TEXT("Options"), CPF_Config);
 }
 
 void UVulkanRenderDevice::LoadConfiguration(std::string filename)

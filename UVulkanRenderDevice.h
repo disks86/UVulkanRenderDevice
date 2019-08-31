@@ -488,6 +488,8 @@ struct CachedTexture
 	vk::UniqueDeviceMemory mImageDeviceMemory;
 	vk::UniqueImageView mImageView;
 
+	vk::UniqueSampler mSampler;
+
 	vk::UniqueBuffer mStagingBuffer;
 	vk::UniqueDeviceMemory mStagingBufferMemory;
 
@@ -619,6 +621,11 @@ public:
 
 	bool FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex);
 	void BindTexture(uint32_t index, FTextureInfo& Info, DWORD PolyFlags);
+
+	//UT Config Params
+	void AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue);
+
+	FLOAT LODBias=0.0f;
 
 	//Misc
 	void LoadConfiguration(std::string filename);
