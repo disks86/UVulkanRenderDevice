@@ -180,20 +180,23 @@ void UVulkanRenderDevice::StaticConstructor()
 
 	//Setup Defaults;
 	mConfiguration["LogFile"] = "C:\\Log\\VKUT99.log";
-	mConfiguration["VSync"] = "1";
-	mConfiguration["LogLevel"] = "0"; //Debug 0 Release 3
-	mConfiguration["EnableDebugLayers"] = "1"; //Debug 1 Release 0
 
-	//Load Configuration
+	//Load Configuration (May completely replace with UT properties at some point.)
 	LoadConfiguration("VKUT99.conf");
 
-	//Setup Logging.
-	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)std::stoi(mConfiguration["LogLevel"]));
-
+	//Setup properties.
 #define CPP_PROPERTY_LOCAL(_name) _name, CPP_PROPERTY(_name)
 #define CPP_PROPERTY_LOCAL_DCV(_name) DCV._name, CPP_PROPERTY(DCV._name)
 
 	AddFloatConfigParam(TEXT("LODBias"), CPP_PROPERTY_LOCAL(LODBias), 0.0f);
+	AddIntConfigParam(TEXT("MaxAnisotropy"), CPP_PROPERTY_LOCAL(MaxAnisotropy), 0);
+	AddIntConfigParam(TEXT("LogLevel"), CPP_PROPERTY_LOCAL(LogLevel), 0); //Debug 0 Release 3
+	AddBoolConfigParam(0, TEXT("UseTripleBuffering"), CPP_PROPERTY_LOCAL(UseTripleBuffering), 0);
+	AddBoolConfigParam(0, TEXT("EnableDebugLayers"), CPP_PROPERTY_LOCAL(EnableDebugLayers), 1);
+	AddBoolConfigParam(0, TEXT("UseVSync"), CPP_PROPERTY_LOCAL(UseVSync), 1);
+
+	//Setup Logging.
+	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)LogLevel);
 
 	unguard;
 }
@@ -205,7 +208,6 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 
 	//Start Vulkan
 	BOOL canPresent = false;
-	bool enableDebugLayers = true;
 
 	guard(UVulkanRenderDevice::Init);
 
@@ -214,15 +216,10 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		std::vector<const char*> extensionNames;
 		std::vector<const char*> layerNames;
 
-		if (!mConfiguration["EnableDebugLayers"].empty())
-		{
-			enableDebugLayers = std::stoi(mConfiguration["EnableDebugLayers"]);
-		}
-
 		extensionNames.push_back("VK_KHR_surface");
 		extensionNames.push_back("VK_KHR_win32_surface");
 
-		if (enableDebugLayers)
+		if (EnableDebugLayers)
 		{
 			extensionNames.push_back("VK_EXT_debug_report");
 			layerNames.push_back("VK_LAYER_LUNARG_standard_validation");
@@ -238,7 +235,7 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		}
 	}
 
-	if (enableDebugLayers)
+	if (EnableDebugLayers)
 	{
 		/*
 		If we are debugging then grab the function pointers for the debug methods.
@@ -658,7 +655,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	If the parameters say to use V-Sync then just roll with FIFO regardless of what is available.
 	*/
 	mSwapchainPresentMode = vk::PresentModeKHR::eFifo;
-	if (!mConfiguration["VSync"].empty() && !std::stoi(mConfiguration["VSync"]))
+	if (!UseVSync)
 	{
 		Log(info) << "VSync: false" << std::endl;
 		auto presentModes = mPhysicalDevices[mPhysicalDeviceIndex].getSurfacePresentModesKHR(mSurface.get());
@@ -950,6 +947,9 @@ void UVulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Su
 void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& Info, FTransTexture** Pts, int NumPts, DWORD PolyFlags, FSpanBuffer* Span)
 {
 	guard(UVulkanRenderDevice::DrawGouraudPolygon);
+
+	BindTexture(0, 4, Info, PolyFlags);
+
 	Log(info) << "UVulkanRenderDevice::DrawGouraudPolygon" << std::endl;
 	unguard;
 }
@@ -958,7 +958,7 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 {
 	guard(UVulkanRenderDevice::DrawTile);
 
-	BindTexture(0, Info, PolyFlags);
+	BindTexture(0, 4, Info, PolyFlags);
 
 	Log(info) << "UVulkanRenderDevice::DrawTile" << std::endl;
 	unguard;
@@ -1018,6 +1018,104 @@ void UVulkanRenderDevice::ReadPixels(FColor* Pixels)
 	unguard;
 }
 
+void UVulkanRenderDevice::BeginRecordingUtilityCommands()
+{
+	mUtilityRecordingCount++;
+
+	if (mUtilityRecordingCount > 1)
+	{
+		return;
+	}
+
+	mUtilityIndex = (mUtilityIndex++) % mUtilityCommandBuffers.size();
+
+	mDevice->waitForFences(1, &mUtilityFences[mUtilityIndex].get(), VK_TRUE, UINT64_MAX);
+	mDevice->resetFences(1, &mUtilityFences[mUtilityIndex].get());
+
+	mCurrentUtilityCommandBuffer = mUtilityCommandBuffers[mUtilityIndex].get();
+
+	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
+	mCurrentUtilityCommandBuffer.begin(&beginInfo);
+}
+
+void UVulkanRenderDevice::StopRecordingUtilityCommands()
+{
+	mUtilityRecordingCount--;
+
+	if (mUtilityRecordingCount > 0)
+	{
+		return;
+	}
+
+	mCurrentUtilityCommandBuffer.end();
+
+	vk::PipelineStageFlags pipelineFlag[] = { vk::PipelineStageFlagBits::eColorAttachmentOutput }; //eAllCommands
+	vk::SubmitInfo submitInfo;
+	submitInfo.pWaitDstStageMask = pipelineFlag;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &mCurrentUtilityCommandBuffer;
+	mQueue.submit(1, &submitInfo, mUtilityFences[mUtilityIndex].get());
+
+	mUtilityRecordingCount = 0;
+}
+
+void UVulkanRenderDevice::SetImageLayout(CachedTexture& cachedTexture, vk::ImageLayout newLayout)
+{
+	BeginRecordingUtilityCommands();
+	{
+		const vk::PipelineStageFlags src_stages = ((cachedTexture.mImageLayout == vk::ImageLayout::eTransferSrcOptimal || cachedTexture.mImageLayout == vk::ImageLayout::eTransferDstOptimal) ? vk::PipelineStageFlagBits::eTransfer : vk::PipelineStageFlagBits::eTopOfPipe);
+		const vk::PipelineStageFlags dest_stages = ((newLayout == vk::ImageLayout::eTransferSrcOptimal || newLayout == vk::ImageLayout::eTransferDstOptimal) ? vk::PipelineStageFlagBits::eTransfer : vk::PipelineStageFlagBits::eColorAttachmentOutput);
+
+		auto DstAccessMask = [](vk::ImageLayout const& layout)
+		{
+			vk::AccessFlags flags;
+
+			switch (layout) {
+			case vk::ImageLayout::eTransferDstOptimal:
+				// Make sure anything that was copying from this image has completed
+				flags = vk::AccessFlagBits::eTransferWrite;
+				break;
+			case vk::ImageLayout::eColorAttachmentOptimal:
+				flags = vk::AccessFlagBits::eColorAttachmentWrite;
+				break;
+			case vk::ImageLayout::eDepthStencilAttachmentOptimal:
+				flags = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+				break;
+			case vk::ImageLayout::eShaderReadOnlyOptimal:
+				// Make sure any Copy or CPU writes to image are flushed
+				flags = vk::AccessFlagBits::eShaderRead | vk::AccessFlagBits::eInputAttachmentRead;
+				break;
+			case vk::ImageLayout::eTransferSrcOptimal:
+				flags = vk::AccessFlagBits::eTransferRead;
+				break;
+			case vk::ImageLayout::ePresentSrcKHR:
+				flags = vk::AccessFlagBits::eMemoryRead;
+				break;
+			default:
+				break;
+			}
+
+			return flags;
+		};
+
+		auto const barrier = vk::ImageMemoryBarrier()
+			.setSrcAccessMask(vk::AccessFlagBits())
+			.setDstAccessMask(DstAccessMask(newLayout))
+			.setOldLayout(cachedTexture.mImageLayout)
+			.setNewLayout(newLayout)
+			.setSrcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+			.setDstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
+			.setImage(cachedTexture.mImage.get())
+			.setSubresourceRange(vk::ImageSubresourceRange((vk::ImageAspectFlagBits::eColor), 0, 1, 0, 1));
+
+		mCurrentUtilityCommandBuffer.pipelineBarrier(src_stages, dest_stages, vk::DependencyFlagBits(), 0, nullptr, 0, nullptr, 1, &barrier);
+
+	}
+	StopRecordingUtilityCommands();
+
+	cachedTexture.mImageLayout = newLayout;
+}
+
 bool UVulkanRenderDevice::FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex)
 {
 	// Search memtypes to find first index with those properties
@@ -1039,7 +1137,7 @@ bool UVulkanRenderDevice::FindMemoryTypeFromProperties(uint32_t typeBits, vk::Me
 	return false;
 }
 
-void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD PolyFlags)
+void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureInfo& Info, DWORD PolyFlags)
 {
 	std::shared_ptr<CachedTexture> cachedTexture;
 
@@ -1103,7 +1201,7 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 
 			const vk::ImageCreateInfo imageCreateInfo = vk::ImageCreateInfo()
 				.setImageType(vk::ImageType::e2D)
-				.setFormat(cachedTexture->mFormat) //TODO: handle format translation.
+				.setFormat(cachedTexture->mFormat)
 				.setExtent({ cachedTexture->mWidth, cachedTexture->mHeight, 1 })
 				.setMipLevels(cachedTexture->mMipMapCount)
 				.setArrayLayers(1)
@@ -1140,8 +1238,8 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 
 		//Create staging buffer.
 		{
-			const uint32_t size = cachedTexture->mWidth * cachedTexture->mHeight * SizeOf(cachedTexture->mFormat);
-			auto const bufferInfo = vk::BufferCreateInfo().setSize((vk::DeviceSize)size).setUsage(vk::BufferUsageFlagBits::eTransferSrc);
+			cachedTexture->mSize = cachedTexture->mWidth * cachedTexture->mHeight * SizeOf(cachedTexture->mFormat); //TODO: double check this.
+			auto const bufferInfo = vk::BufferCreateInfo().setSize((vk::DeviceSize)cachedTexture->mSize).setUsage(vk::BufferUsageFlagBits::eTransferSrc);
 
 			cachedTexture->mStagingBuffer = mDevice->createBufferUnique(bufferInfo);
 
@@ -1155,39 +1253,93 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, FTextureInfo& Info, DWORD 
 
 			mDevice->bindBufferMemory(cachedTexture->mStagingBuffer.get(), cachedTexture->mStagingBufferMemory.get(), 0);
 		}
+
+		//Create sampler
 		{
+			const int texureFilterParameters = 0; //TODO: Revisit later
+
+			const auto addressMode = (texureFilterParameters & CT_ADDRESS_CLAMP_NOT_WRAP_BIT) ? vk::SamplerAddressMode::eClampToEdge : vk::SamplerAddressMode::eRepeat;
+			const auto magFilter = (texureFilterParameters & CT_MAG_FILTER_LINEAR_NOT_POINT_BIT) ? vk::Filter::eLinear : vk::Filter::eNearest;
+			const auto minFilter = ((texureFilterParameters & CT_MIP_FILTER_MASK) == CT_MIP_FILTER_LINEAR) ? vk::Filter::eLinear : vk::Filter::eNearest;
+			const auto mipMode = ((texureFilterParameters & CT_MIP_FILTER_MASK) == CT_MIP_FILTER_LINEAR) ? vk::SamplerMipmapMode::eLinear : vk::SamplerMipmapMode::eNearest;
+
 			const vk::SamplerCreateInfo samplerCreateInfo = vk::SamplerCreateInfo()
-				.setMagFilter(vk::Filter::eNearest)
-				.setMinFilter(vk::Filter::eNearest)
-				.setAddressModeU(vk::SamplerAddressMode::eRepeat)
-				.setAddressModeV(vk::SamplerAddressMode::eRepeat)
-				.setAddressModeW(vk::SamplerAddressMode::eRepeat)
-				.setMipmapMode(vk::SamplerMipmapMode::eNearest)
+				.setMagFilter(magFilter)
+				.setMinFilter(minFilter)
+				.setAddressModeU(addressMode)
+				.setAddressModeV(addressMode)
+				.setAddressModeW(addressMode)
+				.setMipmapMode(mipMode)
 				.setMipLodBias(LODBias)
 				.setBorderColor(vk::BorderColor::eFloatOpaqueWhite)
 				.setUnnormalizedCoordinates(VK_FALSE)
 				.setCompareOp(vk::CompareOp::eNever)
 				.setMinLod(0.0f)
-				.setMaxLod(0.0f);
-
-			//TODO: handle anisotropy
+				.setMaxLod(0.0f)
+				.setAnisotropyEnable((vk::Bool32)MaxAnisotropy)
+				.setMaxAnisotropy(MaxAnisotropy);
 
 			cachedTexture->mSampler = mDevice->createSamplerUnique(samplerCreateInfo);
 		}
+
+		//Upload provided texture data.
+		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
+		{
+			void* data = mDevice->mapMemory(cachedTexture->mStagingBufferMemory.get(), (vk::DeviceSize)0, VK_WHOLE_SIZE);
+			memcpy(data, Info.Mips[i]->DataPtr, cachedTexture->mSize);
+			mDevice->unmapMemory(cachedTexture->mStagingBufferMemory.get());
+
+			BeginRecordingUtilityCommands();
+			{
+				this->SetImageLayout(*cachedTexture, vk::ImageLayout::eTransferDstOptimal);
+
+				auto const subresource = vk::ImageSubresourceLayers()
+					.setAspectMask(vk::ImageAspectFlagBits::eColor)
+					.setMipLevel(i)
+					.setBaseArrayLayer(0)
+					.setLayerCount(1);
+
+				auto const copy_region =
+					vk::BufferImageCopy()
+					.setBufferOffset(0)
+					.setBufferRowLength(cachedTexture->mWidth)
+					.setBufferImageHeight(cachedTexture->mHeight)
+					.setImageSubresource(subresource)
+					.setImageOffset({ 0, 0, 0 })
+					.setImageExtent({ cachedTexture->mWidth, cachedTexture->mHeight, 1 });
+
+				mCurrentUtilityCommandBuffer.copyBufferToImage(cachedTexture->mStagingBuffer.get(), cachedTexture->mImage.get(), vk::ImageLayout::eTransferDstOptimal, 1, &copy_region);
+
+				SetImageLayout(*cachedTexture, vk::ImageLayout::eShaderReadOnlyOptimal);
+			}
+			StopRecordingUtilityCommands();
+		}
 	}
 
-	//TODO: handle sampler.
-
-	mDescriptorImageInfo[index].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-	mDescriptorImageInfo[index].sampler = vk::Sampler();
-	mDescriptorImageInfo[index].imageView = cachedTexture->mImageView.get();
-
+	for (size_t i = index; i < (index+count); i++)
+	{
+		mDescriptorImageInfo[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+		mDescriptorImageInfo[i].sampler = cachedTexture->mSampler.get();
+		mDescriptorImageInfo[i].imageView = cachedTexture->mImageView.get();
+	}
 }
 
 void UVulkanRenderDevice::AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue)
 {
 	param = defaultValue;
 	new(GetClass(), pName, RF_Public)UFloatProperty(EC_CppProperty, InOffset, TEXT("Options"), CPF_Config);
+}
+
+void UVulkanRenderDevice::AddBoolConfigParam(DWORD BitMaskOffset, const TCHAR* pName, UBOOL& param, ECppProperty EC_CppProperty, INT InOffset, UBOOL defaultValue)
+{
+	param = (((defaultValue) != 0) ? 1 : 0) << BitMaskOffset; //Doesn't exactly work like a UBOOL "// Boolean 0 (false) or 1 (true)."
+	new(GetClass(), pName, RF_Public)UBoolProperty(EC_CppProperty, InOffset, TEXT("Options"), CPF_Config);
+}
+
+void UVulkanRenderDevice::AddIntConfigParam(const TCHAR* pName, INT& param, ECppProperty EC_CppProperty, INT InOffset, INT defaultValue)
+{
+	param = defaultValue;
+	new(GetClass(), pName, RF_Public)UIntProperty(EC_CppProperty, InOffset, TEXT("Options"), CPF_Config);
 }
 
 void UVulkanRenderDevice::LoadConfiguration(std::string filename)

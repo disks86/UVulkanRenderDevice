@@ -494,7 +494,9 @@ struct CachedTexture
 	vk::UniqueDeviceMemory mStagingBufferMemory;
 
 	vk::Format mFormat = vk::Format::eUndefined;
+	vk::ImageLayout mImageLayout{ vk::ImageLayout::eUndefined };
 
+	uint32_t mSize;
 	uint32_t mWidth = 0;
 	uint32_t mHeight = 0;
 	uint32_t mMipMapCount = 0;
@@ -551,11 +553,18 @@ public:
 	std::vector<vk::UniqueCommandBuffer> mUtilityCommandBuffers;
 	std::vector<vk::UniqueFence> mUtilityFences;
 	uint32_t mUtilityIndex = 0;
+	int32_t mUtilityRecordingCount = 0;
 	vk::UniqueDescriptorSetLayout mDescriptorLayout;
 	vk::UniquePipelineLayout mPipelineLayout;
 	vk::DescriptorBufferInfo mDescriptorBufferInfo[3];
 	vk::WriteDescriptorSet mWriteDescriptorSet[3];
 	vk::DescriptorImageInfo mDescriptorImageInfo[4];
+	//vk::CommandBuffer mCurrentDrawCommandBuffer;
+	vk::CommandBuffer mCurrentUtilityCommandBuffer;
+
+	void BeginRecordingUtilityCommands();
+	void StopRecordingUtilityCommands();
+	void SetImageLayout(CachedTexture& cachedTexture, vk::ImageLayout newLayout);
 
 	//Vulkan Surface & Swap Chain
 	vk::UniqueSurfaceKHR mSurface;
@@ -620,12 +629,19 @@ public:
 	vk::UniqueShaderModule mDefaultRenderingStateFragment;
 
 	bool FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex);
-	void BindTexture(uint32_t index, FTextureInfo& Info, DWORD PolyFlags);
+	void BindTexture(uint32_t index, uint32_t count, FTextureInfo& Info, DWORD PolyFlags);
 
 	//UT Config Params
 	void AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue);
+	void AddBoolConfigParam(DWORD BitMaskOffset, const TCHAR* pName, UBOOL& param, ECppProperty EC_CppProperty, INT InOffset, UBOOL defaultValue);
+	void AddIntConfigParam(const TCHAR* pName, INT& param, ECppProperty EC_CppProperty, INT InOffset, INT defaultValue);
 
-	FLOAT LODBias=0.0f;
+	FLOAT LODBias = 0.0f;
+	INT MaxAnisotropy = 0;
+	INT LogLevel = 0;
+	UBOOL UseTripleBuffering = 0;
+	UBOOL EnableDebugLayers = 0;
+	UBOOL UseVSync = 0;
 
 	//Misc
 	void LoadConfiguration(std::string filename);
