@@ -647,6 +647,8 @@ public:
 	FLOAT LODBias = 0.0f;
 	INT MaxAnisotropy = 0;
 	INT LogLevel = 0;
+	INT MinLogTextureSize = 0;
+	INT MaxLogTextureSize = 8;
 	UBOOL UseTripleBuffering = 0;
 	UBOOL EnableDebugLayers = 0;
 	UBOOL UseVSync = 0;

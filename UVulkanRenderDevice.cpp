@@ -201,6 +201,8 @@ void UVulkanRenderDevice::StaticConstructor()
 	AddFloatConfigParam(TEXT("LODBias"), CPP_PROPERTY_LOCAL(LODBias), 0.0f);
 	AddIntConfigParam(TEXT("MaxAnisotropy"), CPP_PROPERTY_LOCAL(MaxAnisotropy), 0);
 	AddIntConfigParam(TEXT("LogLevel"), CPP_PROPERTY_LOCAL(LogLevel), 0); //Debug 0 Release 3
+	AddIntConfigParam(TEXT("MinLogTextureSize"), CPP_PROPERTY_LOCAL(MinLogTextureSize), 0);
+	AddIntConfigParam(TEXT("MaxLogTextureSize"), CPP_PROPERTY_LOCAL(MaxLogTextureSize), 8); 
 	AddBoolConfigParam(0, TEXT("UseTripleBuffering"), CPP_PROPERTY_LOCAL(UseTripleBuffering), 0);
 	AddBoolConfigParam(0, TEXT("EnableDebugLayers"), CPP_PROPERTY_LOCAL(EnableDebugLayers), 1);
 	AddBoolConfigParam(0, TEXT("UseVSync"), CPP_PROPERTY_LOCAL(UseVSync), 1);
@@ -618,6 +620,16 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	guard(UVulkanRenderDevice::SetRes);
+
+	//Misc UT setup
+	if (MaxLogTextureSize <= 0)
+	{
+		MaxLogTextureSize = 12;
+	}
+	if (MinLogTextureSize <= 2)
+	{
+		MinLogTextureSize = 2;
+	}
 
 	//Stash the input parameters for later use.
 	mNewX = NewX;
@@ -1342,21 +1354,34 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		{
 			Info.Load();
 		}
-		Info.bRealtimeChanged = 0;
+		
 
 		//Upload provided texture data.
 		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
 		{
-			if (!Info.Mips[i]->DataPtr)
+			const void* textureData = (void*)Info.Mips[i]->DataPtr;
+
+			if (!textureData)
 			{
 				break;
 			}
-			void* data = mDevice->mapMemory(cachedTexture->mStagingBufferMemory.get(), (vk::DeviceSize)0, VK_WHOLE_SIZE);
-			//size_t test = 0;
-			//memcpy(data, &test, sizeof(size_t));
-			//TODO: reading any of the image data triggers an access violation.
-			//memcpy(data, Info.Mips[i]->DataPtr, 1);
-			//memcpy(data, Info.Mips[i]->DataPtr, cachedTexture->mSize);
+
+			void* bufferPointer = mDevice->mapMemory(cachedTexture->mStagingBufferMemory.get(), (vk::DeviceSize)0, VK_WHOLE_SIZE);
+
+			if (bufferPointer)
+			{
+				try
+				{
+					memcpy(bufferPointer, textureData, cachedTexture->mSize);
+					Info.bRealtimeChanged = 0;
+				}
+				catch (...)
+				{
+					//TODO: figure out why mip zero triggers an access exception. (happens even when reading one byte)
+					memset(bufferPointer, INT_MAX, cachedTexture->mSize);
+				}
+			}	
+
 			mDevice->unmapMemory(cachedTexture->mStagingBufferMemory.get());
 
 			BeginRecordingUtilityCommands();
