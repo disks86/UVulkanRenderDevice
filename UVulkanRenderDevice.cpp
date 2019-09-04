@@ -208,6 +208,14 @@ void UVulkanRenderDevice::StaticConstructor()
 #undef CPP_PROPERTY_LOCAL
 #undef CPP_PROPERTY_LOCAL_DCV
 
+	//URenderDevice flags
+	SpanBased = 0;
+	SupportsFogMaps = 0;
+	SupportsDistanceFog = 0;
+	FullscreenOnly = 0;
+	SupportsLazyTextures = 0;
+	PrefersDeferredLoad = 0;
+
 	//Setup Logging.
 	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)LogLevel);
 
@@ -825,8 +833,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 void UVulkanRenderDevice::Exit(void)
 {
 	guard(UVulkanRenderDevice::Exit);
-	//TODO: check to see if I really need to use this.
-	Log(info) << "UVulkanRenderDevice::Exit" << std::endl;
+	mDevice->waitIdle();
 	unguard;
 }
 
@@ -1105,7 +1112,7 @@ void UVulkanRenderDevice::SetImageLayout(CachedTexture& cachedTexture, vk::Image
 	BeginRecordingUtilityCommands();
 	{
 		const vk::PipelineStageFlags src_stages = ((cachedTexture.mImageLayout == vk::ImageLayout::eTransferSrcOptimal || cachedTexture.mImageLayout == vk::ImageLayout::eTransferDstOptimal) ? vk::PipelineStageFlagBits::eTransfer : vk::PipelineStageFlagBits::eTopOfPipe);
-		const vk::PipelineStageFlags dest_stages = ((newLayout == vk::ImageLayout::eTransferSrcOptimal || newLayout == vk::ImageLayout::eTransferDstOptimal) ? vk::PipelineStageFlagBits::eTransfer : vk::PipelineStageFlagBits::eColorAttachmentOutput);
+		const vk::PipelineStageFlags dest_stages = ((newLayout == vk::ImageLayout::eTransferSrcOptimal || newLayout == vk::ImageLayout::eTransferDstOptimal) ? vk::PipelineStageFlagBits::eTransfer : vk::PipelineStageFlagBits::eFragmentShader); //eColorAttachmentOutput
 
 		auto DstAccessMask = [](vk::ImageLayout const& layout)
 		{
@@ -1185,21 +1192,25 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 	std::shared_ptr<CachedTexture> cachedTexture;
 
 	QWORD cacheId = Info.CacheID;
+	bool isDirty = false;
 
 	auto it = mCachedTextures.find(cacheId);
 	if (it != mCachedTextures.end())
 	{
 		cachedTexture = it->second;
+		isDirty = Info.bRealtimeChanged;
 	}
 	else
 	{
+		isDirty = true;
+
 		cachedTexture = std::make_shared<CachedTexture>();
 		mCachedTextures[cacheId] = cachedTexture;
 
 		//Figure out Image information
-		cachedTexture->mWidth = 1 << Info.Mips[0]->UBits;
-		cachedTexture->mHeight = 1 << Info.Mips[0]->VBits;
-		cachedTexture->mMipMapCount = Info.NumMips;
+		cachedTexture->mWidth = Info.USize;
+		cachedTexture->mHeight = Info.VSize;
+		cachedTexture->mMipMapCount = std::max(Info.NumMips,1);
 
 		vk::ComponentMapping componentMapping;
 
@@ -1274,7 +1285,7 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 				.setImage(cachedTexture->mImage.get())
 				.setViewType(vk::ImageViewType::e2D)
 				.setFormat(cachedTexture->mFormat)
-				.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, Info.NumMips, 0, 1))
+				.setSubresourceRange(vk::ImageSubresourceRange(vk::ImageAspectFlagBits::eColor, 0, cachedTexture->mMipMapCount, 0, 1))
 				.setComponents(componentMapping);
 			cachedTexture->mImageView = mDevice->createImageViewUnique(viewInfo);
 		}
@@ -1323,12 +1334,29 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 
 			cachedTexture->mSampler = mDevice->createSamplerUnique(samplerCreateInfo);
 		}
+	}
+
+	if (isDirty)
+	{
+		if (SupportsLazyTextures) 
+		{
+			Info.Load();
+		}
+		Info.bRealtimeChanged = 0;
 
 		//Upload provided texture data.
 		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
 		{
+			if (!Info.Mips[i]->DataPtr)
+			{
+				break;
+			}
 			void* data = mDevice->mapMemory(cachedTexture->mStagingBufferMemory.get(), (vk::DeviceSize)0, VK_WHOLE_SIZE);
-			memcpy(data, Info.Mips[i]->DataPtr, cachedTexture->mSize);
+			//size_t test = 0;
+			//memcpy(data, &test, sizeof(size_t));
+			//TODO: reading any of the image data triggers an access violation.
+			//memcpy(data, Info.Mips[i]->DataPtr, 1);
+			//memcpy(data, Info.Mips[i]->DataPtr, cachedTexture->mSize);
 			mDevice->unmapMemory(cachedTexture->mStagingBufferMemory.get());
 
 			BeginRecordingUtilityCommands();
@@ -1355,6 +1383,11 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 				SetImageLayout(*cachedTexture, vk::ImageLayout::eShaderReadOnlyOptimal);
 			}
 			StopRecordingUtilityCommands();
+		}
+
+		if (SupportsLazyTextures) 
+		{
+			Info.Unload();
 		}
 	}
 
@@ -1392,9 +1425,10 @@ void UVulkanRenderDevice::UpdateDescriptors(bool write)
 
 		mWriteDescriptorSet[0].dstSet = mLastDescriptorSet; //Vertex
 		mWriteDescriptorSet[1].dstSet = mLastDescriptorSet; //Fragment
+		mWriteDescriptorSet[2].dstSet = mLastDescriptorSet; //Fragment
 		mWriteDescriptorSet[2].pImageInfo = mDescriptorImageInfo; //Fragment
 
-		mDevice->updateDescriptorSets(9, &mWriteDescriptorSet[0], 0, nullptr);
+		mDevice->updateDescriptorSets(3, &mWriteDescriptorSet[0], 0, nullptr);
 	}
 
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
