@@ -559,12 +559,12 @@ public:
 	vk::DescriptorBufferInfo mDescriptorBufferInfo[3];
 	vk::WriteDescriptorSet mWriteDescriptorSet[3];
 	vk::DescriptorImageInfo mDescriptorImageInfo[4];
+	std::array<std::vector<vk::DescriptorSet>, 3> mDescriptorSets;
+	int32_t mDescriptorSetIndex = 0;
+	vk::DescriptorSet mLastDescriptorSet;
+	std::array<std::vector<vk::UniquePipeline>, 3> mPipelines;
 	//vk::CommandBuffer mCurrentDrawCommandBuffer;
 	vk::CommandBuffer mCurrentUtilityCommandBuffer;
-
-	void BeginRecordingUtilityCommands();
-	void StopRecordingUtilityCommands();
-	void SetImageLayout(CachedTexture& cachedTexture, vk::ImageLayout newLayout);
 
 	//Vulkan Surface & Swap Chain
 	vk::UniqueSurfaceKHR mSurface;
@@ -618,6 +618,12 @@ public:
 	std::map<QWORD, std::shared_ptr<CachedTexture> > mCachedTextures;
 
 	//Vulkan Shaders
+	vk::UniqueShaderModule mDefaultRenderingStateVertex;
+	vk::UniqueShaderModule mDefaultRenderingStateFragment;
+
+
+
+	//Vulkan Functions
 	template < typename T, int32_t arraySize>
 	vk::UniqueShaderModule LoadShaderFromConst(const T(&data)[arraySize])
 	{
@@ -625,11 +631,13 @@ public:
 		return mDevice->createShaderModuleUnique(moduleCreateInfo);
 	}
 
-	vk::UniqueShaderModule mDefaultRenderingStateVertex;
-	vk::UniqueShaderModule mDefaultRenderingStateFragment;
-
+	void BeginRecordingUtilityCommands();
+	void StopRecordingUtilityCommands();
+	void SetImageLayout(CachedTexture& cachedTexture, vk::ImageLayout newLayout);
 	bool FindMemoryTypeFromProperties(uint32_t typeBits, vk::MemoryPropertyFlags requirements_mask, uint32_t* typeIndex);
 	void BindTexture(uint32_t index, uint32_t count, FTextureInfo& Info, DWORD PolyFlags);
+	void UpdateDescriptors(bool write);
+	void UpdatePipline(DWORD PolyFlags, vk::PrimitiveTopology topology = vk::PrimitiveTopology::eTriangleFan, uint32_t vertexElementCount = 2, bool secondColor = false);
 
 	//UT Config Params
 	void AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue);

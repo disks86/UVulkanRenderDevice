@@ -147,17 +147,27 @@ const uint32_t DEFAULT_RENDERING_STATE_FRAG[] =
 const vk::VertexInputAttributeDescription gStandardVertexInputAttributeDescription[6] =
 {
 	vk::VertexInputAttributeDescription(0U,0U,vk::Format::eR32G32B32Sfloat,0),
-	vk::VertexInputAttributeDescription(1U,0U,vk::Format::eR32G32B32A32Sfloat,12),
+	vk::VertexInputAttributeDescription(1U,0U,vk::Format::eR32G32B32A32Sfloat,VEC3_SIZE),
 	vk::VertexInputAttributeDescription(2U,2U,vk::Format::eR32G32Sfloat,0),
 	vk::VertexInputAttributeDescription(3U,3U,vk::Format::eR32G32Sfloat,0),
 	vk::VertexInputAttributeDescription(4U,4U,vk::Format::eR32G32Sfloat,0),
 	vk::VertexInputAttributeDescription(5U,5U,vk::Format::eR32G32Sfloat,0)
 };
 
+const vk::VertexInputBindingDescription gStandardVertexInputBindingDescription[6] =
+{
+	vk::VertexInputBindingDescription(0U,VEC3_SIZE + VEC4_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(1U,VEC3_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(2U,VEC2_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(3U,VEC2_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(4U,VEC2_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(5U,VEC2_SIZE,vk::VertexInputRate::eVertex)
+};
+
 const vk::VertexInputAttributeDescription gTwoColorVertexInputAttributeDescription[7] =
 {
 	vk::VertexInputAttributeDescription(0U,0U,vk::Format::eR32G32B32Sfloat,0),
-	vk::VertexInputAttributeDescription(1U,0U,vk::Format::eR32G32B32A32Sfloat,12),
+	vk::VertexInputAttributeDescription(1U,0U,vk::Format::eR32G32B32A32Sfloat,VEC3_SIZE),
 	vk::VertexInputAttributeDescription(2U,1U,vk::Format::eR32G32B32A32Sfloat,0),
 	vk::VertexInputAttributeDescription(3U,2U,vk::Format::eR32G32Sfloat,0),
 	vk::VertexInputAttributeDescription(4U,3U,vk::Format::eR32G32Sfloat,0),
@@ -195,6 +205,9 @@ void UVulkanRenderDevice::StaticConstructor()
 	AddBoolConfigParam(0, TEXT("EnableDebugLayers"), CPP_PROPERTY_LOCAL(EnableDebugLayers), 1);
 	AddBoolConfigParam(0, TEXT("UseVSync"), CPP_PROPERTY_LOCAL(UseVSync), 1);
 
+#undef CPP_PROPERTY_LOCAL
+#undef CPP_PROPERTY_LOCAL_DCV
+
 	//Setup Logging.
 	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)LogLevel);
 
@@ -219,6 +232,7 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		extensionNames.push_back("VK_KHR_surface");
 		extensionNames.push_back("VK_KHR_win32_surface");
 
+		EnableDebugLayers = 1; //TODO: remove this line.
 		if (EnableDebugLayers)
 		{
 			extensionNames.push_back("VK_EXT_debug_report");
@@ -689,7 +703,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 
 	mSwapChainCreateInfo
 		.setSurface(mSurface.get())
-		.setMinImageCount(mSurfaceCapabilities.minImageCount)
+		.setMinImageCount(std::clamp(2U, mSurfaceCapabilities.minImageCount, mSurfaceCapabilities.maxImageCount))
 		.setImageFormat(mFormat)
 		.setImageColorSpace(mColorSpace)
 		.setImageExtent(mSwapchainExtent)
@@ -830,6 +844,10 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	//TODO: Reset any stats or counters.
 
 	mFrameIndex = (mFrameIndex++) % mSwapChainImages.size();
+	mDescriptorSetIndex = 0;
+	mLastDescriptorSet = vk::DescriptorSet();
+	mPipelines[mFrameIndex].clear();
+
 	mDevice->waitForFences(1, &mDrawFences[mFrameIndex].get(), VK_TRUE, UINT64_MAX);
 	mDevice->resetFences(1, &mDrawFences[mFrameIndex].get());
 
@@ -940,6 +958,9 @@ void UVulkanRenderDevice::Unlock(UBOOL Blit)
 void UVulkanRenderDevice::DrawComplexSurface(FSceneNode* Frame, FSurfaceInfo& Surface, FSurfaceFacet& Facet)
 {
 	guard(UVulkanRenderDevice::DrawComplexSurface);
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
 	Log(info) << "UVulkanRenderDevice::DrawComplexSurface" << std::endl;
 	unguard;
 }
@@ -948,7 +969,11 @@ void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& In
 {
 	guard(UVulkanRenderDevice::DrawGouraudPolygon);
 
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
 	BindTexture(0, 4, Info, PolyFlags);
+	UpdateDescriptors(true);
+	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
 
 	Log(info) << "UVulkanRenderDevice::DrawGouraudPolygon" << std::endl;
 	unguard;
@@ -958,7 +983,11 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 {
 	guard(UVulkanRenderDevice::DrawTile);
 
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
 	BindTexture(0, 4, Info, PolyFlags);
+	UpdateDescriptors(true);
+	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
 
 	Log(info) << "UVulkanRenderDevice::DrawTile" << std::endl;
 	unguard;
@@ -967,6 +996,12 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 void UVulkanRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FVector P1, FVector P2)
 {
 	guard(UVulkanRenderDevice::Draw2DLine);
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
+	UpdateDescriptors(false);
+	UpdatePipline(0, vk::PrimitiveTopology::eTriangleFan, 2, false);
+
 	Log(info) << "UVulkanRenderDevice::Draw2DLine" << std::endl;
 	unguard;
 }
@@ -974,6 +1009,12 @@ void UVulkanRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD Line
 void UVulkanRenderDevice::Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD LineFlags, FLOAT X1, FLOAT Y1, FLOAT X2, FLOAT Y2, FLOAT Z)
 {
 	guard(UVulkanRenderDevice::Draw2DPoint);
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
+	UpdateDescriptors(false);
+	UpdatePipline(0, vk::PrimitiveTopology::eTriangleFan, 2, false);
+
 	Log(info) << "UVulkanRenderDevice::Draw2DPoint" << std::endl;
 	unguard;
 }
@@ -1139,6 +1180,8 @@ bool UVulkanRenderDevice::FindMemoryTypeFromProperties(uint32_t typeBits, vk::Me
 
 void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureInfo& Info, DWORD PolyFlags)
 {
+	guard(UVulkanRenderDevice::BindTexture);
+
 	std::shared_ptr<CachedTexture> cachedTexture;
 
 	QWORD cacheId = Info.CacheID;
@@ -1256,12 +1299,11 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 
 		//Create sampler
 		{
-			const int texureFilterParameters = 0; //TODO: Revisit later
-
-			const auto addressMode = (texureFilterParameters & CT_ADDRESS_CLAMP_NOT_WRAP_BIT) ? vk::SamplerAddressMode::eClampToEdge : vk::SamplerAddressMode::eRepeat;
-			const auto magFilter = (texureFilterParameters & CT_MAG_FILTER_LINEAR_NOT_POINT_BIT) ? vk::Filter::eLinear : vk::Filter::eNearest;
-			const auto minFilter = ((texureFilterParameters & CT_MIP_FILTER_MASK) == CT_MIP_FILTER_LINEAR) ? vk::Filter::eLinear : vk::Filter::eNearest;
-			const auto mipMode = ((texureFilterParameters & CT_MIP_FILTER_MASK) == CT_MIP_FILTER_LINEAR) ? vk::SamplerMipmapMode::eLinear : vk::SamplerMipmapMode::eNearest;
+			//TODO: Revisit later
+			const auto addressMode = vk::SamplerAddressMode::eClampToEdge;
+			const auto magFilter = vk::Filter::eLinear;
+			const auto minFilter = vk::Filter::eLinear;
+			const auto mipMode = vk::SamplerMipmapMode::eLinear;
 
 			const vk::SamplerCreateInfo samplerCreateInfo = vk::SamplerCreateInfo()
 				.setMagFilter(magFilter)
@@ -1316,12 +1358,143 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		}
 	}
 
-	for (size_t i = index; i < (index+count); i++)
+	for (size_t i = index; i < (index + count); i++)
 	{
 		mDescriptorImageInfo[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 		mDescriptorImageInfo[i].sampler = cachedTexture->mSampler.get();
 		mDescriptorImageInfo[i].imageView = cachedTexture->mImageView.get();
 	}
+
+	unguard;
+}
+
+void UVulkanRenderDevice::UpdateDescriptors(bool write)
+{
+	guard(UVulkanRenderDevice::UpdateDescriptors);
+
+	if (write || mLastDescriptorSet == vk::DescriptorSet())
+	{
+		//If we're out of descriptor sets to write into then allocate a new one.
+		if (mDescriptorSetIndex >= (int32_t)mDescriptorSets[mFrameIndex].size())
+		{
+			vk::DescriptorSet descriptorSet;
+			vk::DescriptorSetAllocateInfo descriptorSetInfo(mDescriptorPool.get(), 1, &mDescriptorLayout.get());
+			vk::Result result = mDevice->allocateDescriptorSets(&descriptorSetInfo, &descriptorSet);
+			if (result != vk::Result::eSuccess)
+			{
+				Log(fatal) << "UVulkanRenderDevice::UpdateDescriptors vkAllocateDescriptorSets failed with return code of " << result << std::endl;
+				return;
+			}
+			mDescriptorSets[mFrameIndex].push_back(descriptorSet);
+		}
+
+		mLastDescriptorSet = mDescriptorSets[mFrameIndex][mDescriptorSetIndex];
+
+		mWriteDescriptorSet[0].dstSet = mLastDescriptorSet; //Vertex
+		mWriteDescriptorSet[1].dstSet = mLastDescriptorSet; //Fragment
+		mWriteDescriptorSet[2].pImageInfo = mDescriptorImageInfo; //Fragment
+
+		mDevice->updateDescriptorSets(9, &mWriteDescriptorSet[0], 0, nullptr);
+	}
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
+
+	unguard;
+}
+
+void UVulkanRenderDevice::UpdatePipline(DWORD PolyFlags, vk::PrimitiveTopology topology, uint32_t vertexElementCount, bool secondColor)
+{
+	guard(UVulkanRenderDevice::UpdateDescriptors);
+
+	auto const vertexInputInfo = vk::PipelineVertexInputStateCreateInfo()
+		.setPVertexAttributeDescriptions(secondColor ? gTwoColorVertexInputAttributeDescription : gStandardVertexInputAttributeDescription)
+		.setVertexAttributeDescriptionCount(vertexElementCount)
+		.setPVertexBindingDescriptions(gStandardVertexInputBindingDescription)
+		.setVertexBindingDescriptionCount(6);
+
+	auto const inputAssemblyInfo = vk::PipelineInputAssemblyStateCreateInfo().setTopology(topology);
+	auto const viewportInfo = vk::PipelineViewportStateCreateInfo().setViewportCount(1).setScissorCount(1);
+	auto const rasterizationInfo = vk::PipelineRasterizationStateCreateInfo()
+		.setDepthClampEnable(VK_FALSE)
+		.setRasterizerDiscardEnable(VK_FALSE)
+		.setPolygonMode(vk::PolygonMode::eFill)
+		.setCullMode(vk::CullModeFlagBits::eNone)
+		.setFrontFace(vk::FrontFace::eClockwise) //TODO: double check winding order.
+		.setDepthBiasEnable(VK_TRUE)
+		.setLineWidth(1.0f);
+
+	auto const multisampleInfo = vk::PipelineMultisampleStateCreateInfo();
+
+	auto const frontStencilOp = vk::StencilOpState()
+		//.setReference()
+		//.setCompareMask()
+		//.setWriteMask()
+		//.setFailOp()
+		//.setPassOp()
+		//.setCompareOp()
+		;
+	auto const backStencilOp = vk::StencilOpState()
+		//.setReference()
+		//.setCompareMask()
+		//.setWriteMask()
+		//.setFailOp()
+		//.setPassOp()
+		//.setCompareOp()
+		;
+	auto const depthStencilInfo = vk::PipelineDepthStencilStateCreateInfo()
+		.setDepthTestEnable(VK_TRUE)
+		.setDepthWriteEnable(VK_TRUE)
+		.setDepthCompareOp(vk::CompareOp::eLessOrEqual)
+		.setDepthBoundsTestEnable(VK_FALSE)
+		.setStencilTestEnable(VK_FALSE)
+		.setFront(frontStencilOp)
+		.setBack(backStencilOp);
+
+	vk::PipelineColorBlendAttachmentState const colorBlendAttachments[1] =
+	{
+		vk::PipelineColorBlendAttachmentState()
+		.setColorWriteMask(((PolyFlags & PF_Invisible) == 0) ? vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA : vk::ColorComponentFlags())
+		.setBlendEnable(VK_TRUE)
+		.setColorBlendOp(vk::BlendOp::eAdd)
+		.setSrcColorBlendFactor(vk::BlendFactor::eOne)
+		.setDstColorBlendFactor(vk::BlendFactor::eZero)
+		.setAlphaBlendOp(vk::BlendOp::eAdd)
+		.setSrcAlphaBlendFactor(vk::BlendFactor::eOne)
+		.setDstAlphaBlendFactor(vk::BlendFactor::eZero)
+	};
+	auto const colorBlendInfo = vk::PipelineColorBlendStateCreateInfo().setAttachmentCount(1).setPAttachments(colorBlendAttachments);
+
+	//TODO: Add additional shaders for higher texture count and second color.
+	vk::PipelineShaderStageCreateInfo const shaderStageInfo[2] =
+	{
+		vk::PipelineShaderStageCreateInfo().setStage(vk::ShaderStageFlagBits::eVertex).setModule(mDefaultRenderingStateVertex.get()).setPName("main"),
+		vk::PipelineShaderStageCreateInfo().setStage(vk::ShaderStageFlagBits::eFragment).setModule(mDefaultRenderingStateFragment.get()).setPName("main")
+	};
+
+	vk::DynamicState const dynamicStates[2] = { vk::DynamicState::eViewport, vk::DynamicState::eScissor }; //vk::DynamicState::eDepthBias
+	auto const dynamicStateInfo = vk::PipelineDynamicStateCreateInfo().setPDynamicStates(dynamicStates).setDynamicStateCount(2);
+	auto const pipeline = vk::GraphicsPipelineCreateInfo()
+		.setStageCount(2) //Vertex & Fragment
+		.setPStages(shaderStageInfo)
+		.setPVertexInputState(&vertexInputInfo)
+		.setPInputAssemblyState(&inputAssemblyInfo)
+		.setPViewportState(&viewportInfo)
+		.setPRasterizationState(&rasterizationInfo)
+		.setPMultisampleState(&multisampleInfo)
+		.setPDepthStencilState(&depthStencilInfo)
+		.setPColorBlendState(&colorBlendInfo)
+		.setPDynamicState(&dynamicStateInfo)
+		.setLayout(mPipelineLayout.get())
+		.setRenderPass(mRenderPass.get());
+
+	mPipelines[mFrameIndex].push_back(mDevice->createGraphicsPipelineUnique(mPipelineCache.get(), pipeline));
+
+	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, mPipelines[mFrameIndex][mPipelines[mFrameIndex].size() - 1].get());
+
+	unguard;
 }
 
 void UVulkanRenderDevice::AddFloatConfigParam(const TCHAR* pName, FLOAT& param, ECppProperty EC_CppProperty, INT InOffset, FLOAT defaultValue)

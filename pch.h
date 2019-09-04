@@ -19,45 +19,17 @@
 #define MAX_BUFFERUPDATE 65536u
 #endif // !MAX_BUFFERUPDATE
 
-#ifndef CT_MIN_FILTER_LINEAR
-#define CT_MIN_FILTER_LINEAR				0x01
-#endif // !CT_MIN_FILTER_LINEAR
+#ifndef VEC2_SIZE
+#define VEC2_SIZE (sizeof(float)*2)
+#endif // !VEC2_SIZE
 
-#ifndef CT_MIN_FILTER_ANISOTROPIC
-#define CT_MIN_FILTER_ANISOTROPIC			0x02
-#endif // !CT_MIN_FILTER_ANISOTROPIC
+#ifndef VEC3_SIZE
+#define VEC3_SIZE (sizeof(float)*3)
+#endif // !VEC3_SIZE
 
-#ifndef CT_MIN_FILTER_MASK
-#define CT_MIN_FILTER_MASK					0x03
-#endif // !CT_MIN_FILTER_MASK
-
-#ifndef CT_MIP_FILTER_NONE
-#define CT_MIP_FILTER_NONE					0x00
-#endif // !CT_MIP_FILTER_NONE
-
-#ifndef CT_MIP_FILTER_POINT
-#define CT_MIP_FILTER_POINT					0x04
-#endif // !CT_MIP_FILTER_POINT
-
-#ifndef CT_MIP_FILTER_LINEAR
-#define CT_MIP_FILTER_LINEAR				0x08
-#endif // !CT_MIP_FILTER_LINEAR
-
-#ifndef CT_MIP_FILTER_MASK
-#define CT_MIP_FILTER_MASK					0x0C
-#endif // !CT_MIP_FILTER_MASK
-
-#ifndef CT_MAG_FILTER_LINEAR_NOT_POINT_BIT
-#define CT_MAG_FILTER_LINEAR_NOT_POINT_BIT	0x10
-#endif // !CT_MAG_FILTER_LINEAR_NOT_POINT_BIT
-
-#ifndef CT_HAS_MIPMAPS_BIT
-#define CT_HAS_MIPMAPS_BIT					0x20
-#endif // !CT_HAS_MIPMAPS_BIT
-
-#ifndef CT_ADDRESS_CLAMP_NOT_WRAP_BIT
-#define CT_ADDRESS_CLAMP_NOT_WRAP_BIT		0x40
-#endif // !CT_ADDRESS_CLAMP_NOT_WRAP_BIT
+#ifndef VEC4_SIZE
+#define VEC4_SIZE (sizeof(float)*4)
+#endif // !VEC4_SIZE
 
 //#define WIN32_LEAN_AND_MEAN 
 #include <windows.h>
