@@ -210,14 +210,6 @@ void UVulkanRenderDevice::StaticConstructor()
 #undef CPP_PROPERTY_LOCAL
 #undef CPP_PROPERTY_LOCAL_DCV
 
-	//URenderDevice flags
-	SpanBased = 0;
-	SupportsFogMaps = 0;
-	SupportsDistanceFog = 0;
-	FullscreenOnly = 0;
-	SupportsLazyTextures = 0;
-	PrefersDeferredLoad = 0;
-
 	//Setup Logging.
 	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)LogLevel);
 
@@ -227,8 +219,19 @@ void UVulkanRenderDevice::StaticConstructor()
 UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
 {
 	//UT flags
-	SupportsTC = false;
-
+	Viewport = InViewport;
+	SpanBased = false;
+	FullscreenOnly = false;
+	SupportsFogMaps = false;
+	SupportsTC = true;
+	SupportsDistanceFog = false;
+	SupportsLazyTextures = false;
+	Coronas = true;
+	DetailTextures = true;
+	ShinySurfaces = true;
+	HighDetailActors = true;
+	VolumetricLighting = true;
+	
 	//Start Vulkan
 	BOOL canPresent = false;
 
@@ -579,8 +582,6 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 
 	//Snag the window handle and DC. After that try to set the new resolution
 	{
-		Viewport = InViewport;
-
 		mHWND = (HWND)InViewport->GetWindow();
 		check(mHWND);
 		mHDC = GetDC(mHWND);
@@ -801,7 +802,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 
 	vk::AttachmentDescription attachments[2];
 	attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-	attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eClear, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+	attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
 	vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
 	vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
@@ -883,6 +884,14 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	vk::CommandBufferBeginInfo beginInfo(vk::CommandBufferUsageFlagBits::eOneTimeSubmit);
 	commandBuffer.begin(&beginInfo);
 
+	const VkDeviceSize offsetInBytes = 0;
+	commandBuffer.bindVertexBuffers(0, 1, &mColor1Buffer.get(), &offsetInBytes);
+	commandBuffer.bindVertexBuffers(1, 1, &mColor2Buffer.get(), &offsetInBytes);
+	commandBuffer.bindVertexBuffers(2, 1, &mTexcoord1Buffer.get(), &offsetInBytes);
+	commandBuffer.bindVertexBuffers(3, 1, &mTexcoord2Buffer.get(), &offsetInBytes);
+	commandBuffer.bindVertexBuffers(4, 1, &mTexcoord3Buffer.get(), &offsetInBytes);
+	commandBuffer.bindVertexBuffers(5, 1, &mTexcoord4Buffer.get(), &offsetInBytes);
+
 	commandBuffer.setScissor(0, 1, &mScissor);
 	commandBuffer.setViewport(0, 1, &mViewport);
 
@@ -907,6 +916,28 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 		commandBuffer.clearColorImage(mSwapChainImages[mImageIndex], vk::ImageLayout::eTransferDstOptimal, &mClearValues[0].color, 1, &subResourceRange);
 
 		prePresentBarrier.image = mSwapChainImages[mImageIndex];
+		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+	}
+
+	{
+		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1 };
+
+		prePresentBarrier.image = mDepthImage.get();
+		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
+		prePresentBarrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+
+		vk::ImageSubresourceRange subResourceRange;
+		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+		subResourceRange.baseMipLevel = 0;
+		subResourceRange.levelCount = 1;
+		subResourceRange.baseArrayLayer = 0;
+		subResourceRange.layerCount = 1;
+		commandBuffer.clearDepthStencilImage(mDepthImage.get(), vk::ImageLayout::eTransferDstOptimal, &mClearValues[1].depthStencil, 1, &subResourceRange);
+
+		prePresentBarrier.image = mDepthImage.get();
 		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
 		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
@@ -1002,11 +1033,126 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 {
 	guard(UVulkanRenderDevice::DrawTile);
 
+	// Figure out scaling info for the texture.
+	INT BaseMip = 0;
+	INT UBits = Info.Mips[0]->UBits;
+	INT VBits = Info.Mips[0]->VBits;
+	INT UCopyBits = 0;
+	INT VCopyBits = 0;
+	if ((UBits - VBits) > MaxLogTextureSize) 
+	{
+		VCopyBits += (UBits - VBits) - MaxLogTextureSize;
+		VBits = UBits - MaxLogTextureSize;
+	}
+	if ((VBits - UBits) > MaxLogTextureSize) 
+	{
+		UCopyBits += (VBits - UBits) - MaxLogTextureSize;
+		UBits = VBits - MaxLogTextureSize;
+	}
+	if (UBits < MinLogTextureSize) 
+	{
+		UCopyBits += MinLogTextureSize - UBits;
+		UBits += MinLogTextureSize - UBits;
+	}
+	if (VBits < MinLogTextureSize) 
+	{
+		VCopyBits += MinLogTextureSize - VBits;
+		VBits += MinLogTextureSize - VBits;
+	}
+	if (UBits > MaxLogTextureSize) 
+	{
+		BaseMip += UBits - MaxLogTextureSize;
+		VBits -= UBits - MaxLogTextureSize;
+		UBits = MaxLogTextureSize;
+		if (VBits < 0) {
+			VCopyBits = -VBits;
+			VBits = 0;
+		}
+	}
+	if (VBits > MaxLogTextureSize)
+	{
+		BaseMip += VBits - MaxLogTextureSize;
+		UBits -= VBits - MaxLogTextureSize;
+		VBits = MaxLogTextureSize;
+		if (UBits < 0) {
+			UCopyBits = -UBits;
+			UBits = 0;
+		}
+	}
+
+	// Precompute stuff.
+	FLOAT rcpFrameFX = 1.0f / Frame->FX;
+	mAspect = Frame->FY * rcpFrameFX;
+	mRProjZ = appTan((double)Viewport->Actor->FovAngle * PI / 360.0);
+	mRFX2 = 2.0f * mRProjZ * rcpFrameFX;
+	mRFY2 = 2.0f * mRProjZ * rcpFrameFX;
+
+	//Build Vertex Data
+	FLOAT PX1 = X - Frame->FX2;
+	FLOAT PX2 = PX1 + XL;
+	FLOAT PY1 = Y - Frame->FY2;
+	FLOAT PY2 = PY1 + YL;
+
+	FLOAT RPX1 = mRFX2 * PX1;
+	FLOAT RPX2 = mRFX2 * PX2;
+	FLOAT RPY1 = mRFY2 * PY1;
+	FLOAT RPY2 = mRFY2 * PY2;
+
+	if (!Frame->Viewport->IsOrtho()) 
+	{
+		RPX1 *= Z;
+		RPX2 *= Z;
+		RPY1 *= Z;
+		RPY2 *= Z;
+	}
+
+	const FGLVertexColor position[6] = 
+	{
+		{ RPX1, RPY1 , Z, Color},
+		{ RPX2, RPY1 , Z, Color},
+		{ RPX2, RPY2 , Z, Color},
+		{ RPX1, RPY1 , Z, Color},
+		{ RPX2, RPY2 , Z, Color},
+		{ RPX1, RPY2 , Z, Color}
+	};
+
+	FLOAT TexInfoUMult = 1.0f / (Info.UScale * (Info.USize << UCopyBits));;
+	FLOAT TexInfoVMult = 1.0f / (Info.VScale * (Info.VSize << VCopyBits));
+
+	FLOAT SU1 = (U)* TexInfoUMult;
+	FLOAT SU2 = (U + UL) * TexInfoUMult;
+	FLOAT SV1 = (V)* TexInfoVMult;
+	FLOAT SV2 = (V + VL) * TexInfoVMult;
+
+	const FGLTexCoord texcoord[6] = 
+	{
+		{SU1,SV1},
+		{SU2,SV1},
+		{SU2,SV2},
+		{SU1,SV1},
+		{SU2,SV2},
+		{SU1,SV2}
+	};
+
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
+
+	commandBuffer.endRenderPass();
+	{
+		commandBuffer.updateBuffer(mColor1Buffer.get(), 0, sizeof(position), &position);
+		commandBuffer.updateBuffer(mTexcoord1Buffer.get(), 0, sizeof(texcoord), &texcoord);
+
+		const auto uboBarrier = vk::MemoryBarrier()
+			.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
+			.setDstAccessMask(vk::AccessFlagBits::eVertexAttributeRead);
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eVertexInput, vk::DependencyFlags(), 1, &uboBarrier, 0, nullptr, 0, nullptr);
+	}
+	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 
 	BindTexture(0, 4, Info, PolyFlags);
 	UpdateDescriptors(true);
 	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
+
+	commandBuffer.draw(6, 1, 0, 0);
 
 	Log(info) << "UVulkanRenderDevice::DrawTile" << std::endl;
 	unguard;
@@ -1045,6 +1191,32 @@ void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 	//The depth is setup as clear in the render pass so just stop and start it. The Color is load/store so that should be safe.
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 	commandBuffer.endRenderPass();
+	{
+		vk::ImageMemoryBarrier prePresentBarrier;
+		prePresentBarrier.srcAccessMask = vk::AccessFlags();
+		prePresentBarrier.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
+		prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1 };
+
+		prePresentBarrier.image = mDepthImage.get();
+		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
+		prePresentBarrier.newLayout = vk::ImageLayout::eTransferDstOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+
+		vk::ImageSubresourceRange subResourceRange;
+		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+		subResourceRange.baseMipLevel = 0;
+		subResourceRange.levelCount = 1;
+		subResourceRange.baseArrayLayer = 0;
+		subResourceRange.layerCount = 1;
+		commandBuffer.clearDepthStencilImage(mDepthImage.get(), vk::ImageLayout::eTransferDstOptimal, &mClearValues[1].depthStencil, 1, &subResourceRange);
+
+		prePresentBarrier.image = mDepthImage.get();
+		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+	}
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 
 	unguard;
@@ -1372,7 +1544,7 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 			{
 				try
 				{
-					memcpy(bufferPointer, textureData, cachedTexture->mSize);
+					//memcpy(bufferPointer, textureData, cachedTexture->mSize);
 					Info.bRealtimeChanged = 0;
 				}
 				catch (...)
@@ -1459,6 +1631,8 @@ void UVulkanRenderDevice::UpdateDescriptors(bool write)
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 
 	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
+
+	mDescriptorSetIndex++;
 
 	unguard;
 }

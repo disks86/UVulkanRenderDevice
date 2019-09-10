@@ -502,6 +502,50 @@ struct CachedTexture
 	uint32_t mMipMapCount = 0;
 };
 
+//Vertex only (for intermediate buffering)
+struct FGLVertex
+{
+	FLOAT x;
+	FLOAT y;
+	FLOAT z;
+};
+
+//Vertex and primary color
+struct FGLVertexColor
+{
+	FLOAT x;
+	FLOAT y;
+	FLOAT z;
+	FPlane color;
+};
+
+//Normals
+struct FGLNormal
+{
+	FLOAT x;
+	FLOAT y;
+	FLOAT z;
+};
+
+//Tex coords
+struct FGLTexCoord
+{
+	FLOAT u;
+	FLOAT v;
+};
+
+//Secondary color
+struct FGLSecondaryColor
+{
+	FPlane specular;
+};
+
+struct FGLMapDot
+{
+	FLOAT u;
+	FLOAT v;
+};
+
 class UVulkanRenderDevice
 	: public URenderDevice
 {
@@ -663,5 +707,10 @@ public:
 	INT mNewY = 0;
 	INT mNewColorBytes = 0;
 	UBOOL mFullscreen = 0;
+
+	FLOAT mRProjZ = 0.0f;
+	FLOAT mAspect = 0.0f;
+	FLOAT mRFX2 = 0.0f;
+	FLOAT mRFY2 = 0.0f;
 };
 
