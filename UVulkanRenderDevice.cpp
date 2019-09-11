@@ -202,7 +202,7 @@ void UVulkanRenderDevice::StaticConstructor()
 	AddIntConfigParam(TEXT("MaxAnisotropy"), CPP_PROPERTY_LOCAL(MaxAnisotropy), 0);
 	AddIntConfigParam(TEXT("LogLevel"), CPP_PROPERTY_LOCAL(LogLevel), 0); //Debug 0 Release 3
 	AddIntConfigParam(TEXT("MinLogTextureSize"), CPP_PROPERTY_LOCAL(MinLogTextureSize), 0);
-	AddIntConfigParam(TEXT("MaxLogTextureSize"), CPP_PROPERTY_LOCAL(MaxLogTextureSize), 8); 
+	AddIntConfigParam(TEXT("MaxLogTextureSize"), CPP_PROPERTY_LOCAL(MaxLogTextureSize), 8);
 	AddBoolConfigParam(0, TEXT("UseTripleBuffering"), CPP_PROPERTY_LOCAL(UseTripleBuffering), 0);
 	AddBoolConfigParam(0, TEXT("EnableDebugLayers"), CPP_PROPERTY_LOCAL(EnableDebugLayers), 1);
 	AddBoolConfigParam(0, TEXT("UseVSync"), CPP_PROPERTY_LOCAL(UseVSync), 1);
@@ -231,7 +231,7 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 	ShinySurfaces = true;
 	HighDetailActors = true;
 	VolumetricLighting = true;
-	
+
 	//Start Vulkan
 	BOOL canPresent = false;
 
@@ -772,7 +772,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 		throw std::runtime_error("DepthStencilAttachment is not supported for D16Unorm depth format.");
 	}
 
-	vk::ImageCreateInfo imageCreateInfo(vk::ImageCreateFlags(), vk::ImageType::e2D, mDepthFormat, vk::Extent3D(mSwapchainExtent.width, mSwapchainExtent.height, 1), 1, 1, vk::SampleCountFlagBits::e1, tiling, vk::ImageUsageFlagBits::eDepthStencilAttachment);
+	vk::ImageCreateInfo imageCreateInfo(vk::ImageCreateFlags(), vk::ImageType::e2D, mDepthFormat, vk::Extent3D(mSwapchainExtent.width, mSwapchainExtent.height, 1), 1, 1, vk::SampleCountFlagBits::e1, tiling, vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eTransferDst);
 	mDepthImage = mDevice->createImageUnique(imageCreateInfo);
 
 	vk::PhysicalDeviceMemoryProperties memoryProperties = mPhysicalDevices[mPhysicalDeviceIndex].getMemoryProperties();
@@ -922,7 +922,7 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	}
 
 	{
-		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1 };
+		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
 
 		prePresentBarrier.image = mDepthImage.get();
 		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
@@ -930,7 +930,7 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 
 		vk::ImageSubresourceRange subResourceRange;
-		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
 		subResourceRange.baseMipLevel = 0;
 		subResourceRange.levelCount = 1;
 		subResourceRange.baseArrayLayer = 0;
@@ -939,7 +939,7 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 
 		prePresentBarrier.image = mDepthImage.get();
 		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		prePresentBarrier.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 	}
 
@@ -1033,53 +1033,6 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 {
 	guard(UVulkanRenderDevice::DrawTile);
 
-	// Figure out scaling info for the texture.
-	INT BaseMip = 0;
-	INT UBits = Info.Mips[0]->UBits;
-	INT VBits = Info.Mips[0]->VBits;
-	INT UCopyBits = 0;
-	INT VCopyBits = 0;
-	if ((UBits - VBits) > MaxLogTextureSize) 
-	{
-		VCopyBits += (UBits - VBits) - MaxLogTextureSize;
-		VBits = UBits - MaxLogTextureSize;
-	}
-	if ((VBits - UBits) > MaxLogTextureSize) 
-	{
-		UCopyBits += (VBits - UBits) - MaxLogTextureSize;
-		UBits = VBits - MaxLogTextureSize;
-	}
-	if (UBits < MinLogTextureSize) 
-	{
-		UCopyBits += MinLogTextureSize - UBits;
-		UBits += MinLogTextureSize - UBits;
-	}
-	if (VBits < MinLogTextureSize) 
-	{
-		VCopyBits += MinLogTextureSize - VBits;
-		VBits += MinLogTextureSize - VBits;
-	}
-	if (UBits > MaxLogTextureSize) 
-	{
-		BaseMip += UBits - MaxLogTextureSize;
-		VBits -= UBits - MaxLogTextureSize;
-		UBits = MaxLogTextureSize;
-		if (VBits < 0) {
-			VCopyBits = -VBits;
-			VBits = 0;
-		}
-	}
-	if (VBits > MaxLogTextureSize)
-	{
-		BaseMip += VBits - MaxLogTextureSize;
-		UBits -= VBits - MaxLogTextureSize;
-		VBits = MaxLogTextureSize;
-		if (UBits < 0) {
-			UCopyBits = -UBits;
-			UBits = 0;
-		}
-	}
-
 	// Precompute stuff.
 	FLOAT rcpFrameFX = 1.0f / Frame->FX;
 	mAspect = Frame->FY * rcpFrameFX;
@@ -1098,7 +1051,7 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 	FLOAT RPY1 = mRFY2 * PY1;
 	FLOAT RPY2 = mRFY2 * PY2;
 
-	if (!Frame->Viewport->IsOrtho()) 
+	if (!Frame->Viewport->IsOrtho())
 	{
 		RPX1 *= Z;
 		RPX2 *= Z;
@@ -1106,7 +1059,7 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 		RPY2 *= Z;
 	}
 
-	const FGLVertexColor position[6] = 
+	const FGLVertexColor position[6] =
 	{
 		{ RPX1, RPY1 , Z, Color},
 		{ RPX2, RPY1 , Z, Color},
@@ -1116,15 +1069,15 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 		{ RPX1, RPY2 , Z, Color}
 	};
 
-	FLOAT TexInfoUMult = 1.0f / (Info.UScale * (Info.USize << UCopyBits));;
-	FLOAT TexInfoVMult = 1.0f / (Info.VScale * (Info.VSize << VCopyBits));
+	FLOAT TexInfoUMult = 1.0f / (Info.UScale * (Info.USize << mUCopyBits));;
+	FLOAT TexInfoVMult = 1.0f / (Info.VScale * (Info.VSize << mVCopyBits));
 
 	FLOAT SU1 = (U)* TexInfoUMult;
 	FLOAT SU2 = (U + UL) * TexInfoUMult;
 	FLOAT SV1 = (V)* TexInfoVMult;
 	FLOAT SV2 = (V + VL) * TexInfoVMult;
 
-	const FGLTexCoord texcoord[6] = 
+	const FGLTexCoord texcoord[6] =
 	{
 		{SU1,SV1},
 		{SU2,SV1},
@@ -1197,7 +1150,7 @@ void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 		prePresentBarrier.dstAccessMask = vk::AccessFlagBits::eMemoryRead;
 		prePresentBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
 		prePresentBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT, 0, 1, 0, 1 };
+		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT , 0, 1, 0, 1 };
 
 		prePresentBarrier.image = mDepthImage.get();
 		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
@@ -1205,7 +1158,7 @@ void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 
 		vk::ImageSubresourceRange subResourceRange;
-		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth | vk::ImageAspectFlagBits::eStencil;
+		subResourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
 		subResourceRange.baseMipLevel = 0;
 		subResourceRange.levelCount = 1;
 		subResourceRange.baseArrayLayer = 0;
@@ -1214,7 +1167,7 @@ void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 
 		prePresentBarrier.image = mDepthImage.get();
 		prePresentBarrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
-		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		prePresentBarrier.newLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal;
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 	}
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
@@ -1378,6 +1331,52 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 	QWORD cacheId = Info.CacheID;
 	bool isDirty = false;
 
+	// Figure out scaling info for the texture.
+	INT BaseMip = 0;
+	INT UBits = Info.Mips[0]->UBits;
+	INT VBits = Info.Mips[0]->VBits;
+	if ((UBits - VBits) > MaxLogTextureSize)
+	{
+		mVCopyBits += (UBits - VBits) - MaxLogTextureSize;
+		VBits = UBits - MaxLogTextureSize;
+	}
+	if ((VBits - UBits) > MaxLogTextureSize)
+	{
+		mUCopyBits += (VBits - UBits) - MaxLogTextureSize;
+		UBits = VBits - MaxLogTextureSize;
+	}
+	if (UBits < MinLogTextureSize)
+	{
+		mUCopyBits += MinLogTextureSize - UBits;
+		UBits += MinLogTextureSize - UBits;
+	}
+	if (VBits < MinLogTextureSize)
+	{
+		mVCopyBits += MinLogTextureSize - VBits;
+		VBits += MinLogTextureSize - VBits;
+	}
+	if (UBits > MaxLogTextureSize)
+	{
+		BaseMip += UBits - MaxLogTextureSize;
+		VBits -= UBits - MaxLogTextureSize;
+		UBits = MaxLogTextureSize;
+		if (VBits < 0) {
+			mVCopyBits = -VBits;
+			VBits = 0;
+		}
+	}
+	if (VBits > MaxLogTextureSize)
+	{
+		BaseMip += VBits - MaxLogTextureSize;
+		UBits -= VBits - MaxLogTextureSize;
+		VBits = MaxLogTextureSize;
+		if (UBits < 0) {
+			mUCopyBits = -UBits;
+			UBits = 0;
+		}
+	}
+
+	//Look for texture or create if it if we haven't seen it yet.
 	auto it = mCachedTextures.find(cacheId);
 	if (it != mCachedTextures.end())
 	{
@@ -1392,9 +1391,9 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		mCachedTextures[cacheId] = cachedTexture;
 
 		//Figure out Image information
-		cachedTexture->mWidth = Info.USize;
-		cachedTexture->mHeight = Info.VSize;
-		cachedTexture->mMipMapCount = std::max(Info.NumMips,1);
+		cachedTexture->mWidth = 1U << UBits;
+		cachedTexture->mHeight = 1U << VBits;
+		cachedTexture->mMipMapCount = std::max(Info.NumMips, 1);
 
 		vk::ComponentMapping componentMapping;
 
@@ -1522,16 +1521,16 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 
 	if (isDirty)
 	{
-		if (SupportsLazyTextures) 
+		if (SupportsLazyTextures)
 		{
 			Info.Load();
 		}
-		
+
 
 		//Upload provided texture data.
 		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
 		{
-			const void* textureData = (void*)Info.Mips[i]->DataPtr;
+			const void* textureData = (void*)Info.Mips[BaseMip + i]->DataPtr;
 
 			if (!textureData)
 			{
@@ -1542,17 +1541,9 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 
 			if (bufferPointer)
 			{
-				try
-				{
-					//memcpy(bufferPointer, textureData, cachedTexture->mSize);
-					Info.bRealtimeChanged = 0;
-				}
-				catch (...)
-				{
-					//TODO: figure out why mip zero triggers an access exception. (happens even when reading one byte)
-					memset(bufferPointer, INT_MAX, cachedTexture->mSize);
-				}
-			}	
+				memcpy(bufferPointer, textureData, cachedTexture->mSize);
+				Info.bRealtimeChanged = 0;
+			}
 
 			mDevice->unmapMemory(cachedTexture->mStagingBufferMemory.get());
 
@@ -1582,7 +1573,7 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 			StopRecordingUtilityCommands();
 		}
 
-		if (SupportsLazyTextures) 
+		if (SupportsLazyTextures)
 		{
 			Info.Unload();
 		}

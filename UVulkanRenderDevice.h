@@ -712,5 +712,7 @@ public:
 	FLOAT mAspect = 0.0f;
 	FLOAT mRFX2 = 0.0f;
 	FLOAT mRFY2 = 0.0f;
+	INT mUCopyBits = 0;
+	INT mVCopyBits = 0;
 };
 
