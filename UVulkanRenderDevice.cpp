@@ -157,7 +157,7 @@ const vk::VertexInputAttributeDescription gStandardVertexInputAttributeDescripti
 const vk::VertexInputBindingDescription gStandardVertexInputBindingDescription[6] =
 {
 	vk::VertexInputBindingDescription(0U,VEC3_SIZE + VEC4_SIZE,vk::VertexInputRate::eVertex),
-	vk::VertexInputBindingDescription(1U,VEC3_SIZE,vk::VertexInputRate::eVertex),
+	vk::VertexInputBindingDescription(1U,VEC4_SIZE,vk::VertexInputRate::eVertex),
 	vk::VertexInputBindingDescription(2U,VEC2_SIZE,vk::VertexInputRate::eVertex),
 	vk::VertexInputBindingDescription(3U,VEC2_SIZE,vk::VertexInputRate::eVertex),
 	vk::VertexInputBindingDescription(4U,VEC2_SIZE,vk::VertexInputRate::eVertex),
@@ -213,6 +213,8 @@ void UVulkanRenderDevice::StaticConstructor()
 	//Setup Logging.
 	LogManager::Create(mConfiguration["LogFile"], (SeverityLevel)LogLevel);
 
+	Log(info) << "UVulkanRenderDevice::StaticConstructor" << std::endl;
+
 	unguard;
 }
 
@@ -246,6 +248,7 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		extensionNames.push_back("VK_KHR_win32_surface");
 
 		EnableDebugLayers = 1; //TODO: remove this line.
+		UseVSync = 1; //TODO: remove this line.
 		if (EnableDebugLayers)
 		{
 			extensionNames.push_back("VK_EXT_debug_report");
@@ -578,8 +581,6 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 		mDefaultRenderingStateFragment = LoadShaderFromConst(DEFAULT_RENDERING_STATE_FRAG);
 	}
 
-	//TODO: setup remaining rendering structures.
-
 	//Snag the window handle and DC. After that try to set the new resolution
 	{
 		mHWND = (HWND)InViewport->GetWindow();
@@ -612,36 +613,6 @@ UBOOL UVulkanRenderDevice::Init(UViewport* InViewport, INT NewX, INT NewY, INT N
 	}
 
 	Log(info) << "SurfaceSupportKHR: " << canPresent << std::endl;
-
-	unguard;
-
-	return canPresent;
-}
-
-UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
-{
-	guard(UVulkanRenderDevice::SetRes);
-
-	//Misc UT setup
-	if (MaxLogTextureSize <= 0)
-	{
-		MaxLogTextureSize = 12;
-	}
-	if (MinLogTextureSize <= 2)
-	{
-		MinLogTextureSize = 2;
-	}
-
-	//Stash the input parameters for later use.
-	mNewX = NewX;
-	mNewY = NewY;
-	mNewColorBytes = NewColorBytes;
-	mFullscreen = Fullscreen;
-
-	Log(info) << "NewX: " << NewX << std::endl;
-	Log(info) << "NewY: " << NewY << std::endl;
-	Log(info) << "NewColorBytes: " << NewColorBytes << std::endl;
-	Log(info) << "Fullscreen: " << Fullscreen << std::endl;
 
 	//Destroy old surface info if there is any.
 	mFrameBuffers.clear();
@@ -711,7 +682,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	{
 		Log(info) << "VSync: true" << std::endl;
 	}
-	//Log(info) << "SwapchainPresentMode: " << mSwapchainPresentMode << std::endl;
+	Log(info) << "SwapchainPresentMode: " << to_string(mSwapchainPresentMode) << std::endl;
 
 	//If I need to handle seperate present and graphics queue then do that here.
 
@@ -754,7 +725,6 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	}
 
 	//Setup Depth Buffer
-
 	mDepthFormat = vk::Format::eD16Unorm;
 	vk::FormatProperties formatProperties = mPhysicalDevices[mPhysicalDeviceIndex].getFormatProperties(mDepthFormat);
 
@@ -801,8 +771,8 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	//Setup Render pass and frame buffer.
 
 	vk::AttachmentDescription attachments[2];
-	attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eColorAttachmentOptimal);
-	attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+	attachments[0] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eColorAttachmentOptimal, vk::ImageLayout::eColorAttachmentOptimal);
+	attachments[1] = vk::AttachmentDescription(vk::AttachmentDescriptionFlags(), mDepthFormat, vk::SampleCountFlagBits::e1, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::AttachmentLoadOp::eLoad, vk::AttachmentStoreOp::eStore, vk::ImageLayout::eDepthStencilAttachmentOptimal, vk::ImageLayout::eDepthStencilAttachmentOptimal);
 
 	vk::AttachmentReference colorReference(0, vk::ImageLayout::eColorAttachmentOptimal);
 	vk::AttachmentReference depthReference(1, vk::ImageLayout::eDepthStencilAttachmentOptimal);
@@ -838,6 +808,61 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 		.setMinDepth(0.0f)
 		.setMaxDepth(1.0f);
 
+	Log(info) << "UVulkanRenderDevice::Init" << std::endl;
+
+	unguard;
+
+	return canPresent;
+}
+
+UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen)
+{
+	guard(UVulkanRenderDevice::SetRes);
+
+	//Misc UT setup
+	if (MaxLogTextureSize <= 0)
+	{
+		MaxLogTextureSize = 12;
+	}
+	if (MinLogTextureSize <= 2)
+	{
+		MinLogTextureSize = 2;
+	}
+
+	//Stash the input parameters for later use.
+	mNewX = NewX;
+	mNewY = NewY;
+	mNewColorBytes = NewColorBytes;
+	mFullscreen = Fullscreen;
+
+	Log(info) << "NewX: " << NewX << std::endl;
+	Log(info) << "NewY: " << NewY << std::endl;
+	Log(info) << "NewColorBytes: " << NewColorBytes << std::endl;
+	Log(info) << "Fullscreen: " << Fullscreen << std::endl;
+
+	if (Viewport!=nullptr)
+	{
+		//Get real viewport size
+		mNewX = Viewport->SizeX;
+		mNewY = Viewport->SizeY;
+
+		//Resize viewport
+		if (!Fullscreen)
+		{
+			if (!Viewport->ResizeViewport(BLIT_HardwarePaint | BLIT_Direct3D, NewX, NewY, NewColorBytes)) {
+				return false;
+			}
+		}
+		else
+		{
+			if (!Viewport->ResizeViewport(Fullscreen ? (BLIT_Fullscreen | BLIT_Direct3D) : (BLIT_HardwarePaint | BLIT_Direct3D), NewX, NewY, NewColorBytes)) {
+				return false;
+			}
+		}
+	}
+
+	Log(info) << "UVulkanRenderDevice::SetRes" << std::endl;
+
 	unguard;
 
 	return true;
@@ -847,6 +872,9 @@ void UVulkanRenderDevice::Exit(void)
 {
 	guard(UVulkanRenderDevice::Exit);
 	mDevice->waitIdle();
+
+	Log(info) << "UVulkanRenderDevice::Exit" << std::endl;
+
 	unguard;
 }
 
@@ -864,14 +892,15 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	//TODO: Reset any stats or counters.
 
 	mFrameIndex = (mFrameIndex++) % mSwapChainImages.size();
-	mDescriptorSetIndex = 0;
-	mLastDescriptorSet = vk::DescriptorSet();
-	mPipelines[mFrameIndex].clear();
 
 	mDevice->waitForFences(1, &mDrawFences[mFrameIndex].get(), VK_TRUE, UINT64_MAX);
 	mDevice->resetFences(1, &mDrawFences[mFrameIndex].get());
 
 	mDevice->acquireNextImageKHR(mSwapChain.get(), UINT64_MAX, mImageAvailableSemaphores[mFrameIndex].get(), vk::Fence(), &mImageIndex);
+	
+	mDescriptorSetIndex = 0;
+	mLastDescriptorSet = vk::DescriptorSet();
+	mPipelines[mFrameIndex].clear();
 
 	vk::ImageMemoryBarrier prePresentBarrier;
 	prePresentBarrier.srcAccessMask = vk::AccessFlags();
@@ -920,6 +949,13 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 	}
+	else
+	{
+		prePresentBarrier.image = mSwapChainImages[mImageIndex];
+		prePresentBarrier.oldLayout = vk::ImageLayout::eUndefined;
+		prePresentBarrier.newLayout = vk::ImageLayout::eColorAttachmentOptimal;
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
+	}
 
 	{
 		prePresentBarrier.subresourceRange = { VK_IMAGE_ASPECT_DEPTH_BIT, 0, 1, 0, 1 };
@@ -953,6 +989,8 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	mRenderPassBeginInfo.clearValueCount = 2;
 	mRenderPassBeginInfo.pClearValues = mClearValues;
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
+
+	Log(info) << "UVulkanRenderDevice::Lock" << std::endl;
 
 	unguard;
 }
@@ -991,8 +1029,8 @@ void UVulkanRenderDevice::Unlock(UBOOL Blit)
 	mQueue.submit(1, &submitInfo, mDrawFences[mFrameIndex].get());
 
 	//Take the swap chain image and display it to the screen.
-	if (Blit)
-	{
+	//if (Blit)
+	//{
 		vk::PresentInfoKHR presentInfo;
 		presentInfo.waitSemaphoreCount = 1;
 		presentInfo.pWaitSemaphores = &mRenderFinishedSemaphores[mFrameIndex].get();
@@ -1000,7 +1038,9 @@ void UVulkanRenderDevice::Unlock(UBOOL Blit)
 		presentInfo.pSwapchains = &mSwapChain.get();
 		presentInfo.pImageIndices = &mImageIndex;
 		mQueue.presentKHR(&presentInfo);
-	}
+	//}
+
+	Log(info) << "UVulkanRenderDevice::Unlock" << std::endl;
 
 	unguard;
 }
@@ -1032,6 +1072,8 @@ void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& In
 void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT X, FLOAT Y, FLOAT XL, FLOAT YL, FLOAT U, FLOAT V, FLOAT UL, FLOAT VL, class FSpanBuffer* Span, FLOAT Z, FPlane Color, FPlane Fog, DWORD PolyFlags)
 {
 	guard(UVulkanRenderDevice::DrawTile);
+
+	BindTexture(0, 4, Info, PolyFlags);
 
 	// Precompute stuff.
 	FLOAT rcpFrameFX = 1.0f / Frame->FX;
@@ -1101,7 +1143,7 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 	}
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 
-	BindTexture(0, 4, Info, PolyFlags);
+	
 	UpdateDescriptors(true);
 	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
 
@@ -1171,6 +1213,8 @@ void UVulkanRenderDevice::ClearZ(FSceneNode* Frame)
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eAllCommands, vk::PipelineStageFlagBits::eAllCommands, vk::DependencyFlags(), 0, nullptr, 0, nullptr, 1, &prePresentBarrier);
 	}
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
+
+	Log(info) << "UVulkanRenderDevice::ClearZ" << std::endl;
 
 	unguard;
 }
@@ -1331,51 +1375,6 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 	QWORD cacheId = Info.CacheID;
 	bool isDirty = false;
 
-	// Figure out scaling info for the texture.
-	INT BaseMip = 0;
-	INT UBits = Info.Mips[0]->UBits;
-	INT VBits = Info.Mips[0]->VBits;
-	if ((UBits - VBits) > MaxLogTextureSize)
-	{
-		mVCopyBits += (UBits - VBits) - MaxLogTextureSize;
-		VBits = UBits - MaxLogTextureSize;
-	}
-	if ((VBits - UBits) > MaxLogTextureSize)
-	{
-		mUCopyBits += (VBits - UBits) - MaxLogTextureSize;
-		UBits = VBits - MaxLogTextureSize;
-	}
-	if (UBits < MinLogTextureSize)
-	{
-		mUCopyBits += MinLogTextureSize - UBits;
-		UBits += MinLogTextureSize - UBits;
-	}
-	if (VBits < MinLogTextureSize)
-	{
-		mVCopyBits += MinLogTextureSize - VBits;
-		VBits += MinLogTextureSize - VBits;
-	}
-	if (UBits > MaxLogTextureSize)
-	{
-		BaseMip += UBits - MaxLogTextureSize;
-		VBits -= UBits - MaxLogTextureSize;
-		UBits = MaxLogTextureSize;
-		if (VBits < 0) {
-			mVCopyBits = -VBits;
-			VBits = 0;
-		}
-	}
-	if (VBits > MaxLogTextureSize)
-	{
-		BaseMip += VBits - MaxLogTextureSize;
-		UBits -= VBits - MaxLogTextureSize;
-		VBits = MaxLogTextureSize;
-		if (UBits < 0) {
-			mUCopyBits = -UBits;
-			UBits = 0;
-		}
-	}
-
 	//Look for texture or create if it if we haven't seen it yet.
 	auto it = mCachedTextures.find(cacheId);
 	if (it != mCachedTextures.end())
@@ -1390,10 +1389,56 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		cachedTexture = std::make_shared<CachedTexture>();
 		mCachedTextures[cacheId] = cachedTexture;
 
+		// Figure out scaling info for the texture.
+		INT BaseMip = 0;
+		INT UBits = Info.Mips[0]->UBits;
+		INT VBits = Info.Mips[0]->VBits;
+		if ((UBits - VBits) > MaxLogTextureSize)
+		{
+			mVCopyBits += (UBits - VBits) - MaxLogTextureSize;
+			VBits = UBits - MaxLogTextureSize;
+		}
+		if ((VBits - UBits) > MaxLogTextureSize)
+		{
+			mUCopyBits += (VBits - UBits) - MaxLogTextureSize;
+			UBits = VBits - MaxLogTextureSize;
+		}
+		if (UBits < MinLogTextureSize)
+		{
+			mUCopyBits += MinLogTextureSize - UBits;
+			UBits += MinLogTextureSize - UBits;
+		}
+		if (VBits < MinLogTextureSize)
+		{
+			mVCopyBits += MinLogTextureSize - VBits;
+			VBits += MinLogTextureSize - VBits;
+		}
+		if (UBits > MaxLogTextureSize)
+		{
+			BaseMip += UBits - MaxLogTextureSize;
+			VBits -= UBits - MaxLogTextureSize;
+			UBits = MaxLogTextureSize;
+			if (VBits < 0) {
+				mVCopyBits = -VBits;
+				VBits = 0;
+			}
+		}
+		if (VBits > MaxLogTextureSize)
+		{
+			BaseMip += VBits - MaxLogTextureSize;
+			UBits -= VBits - MaxLogTextureSize;
+			VBits = MaxLogTextureSize;
+			if (UBits < 0) {
+				mUCopyBits = -UBits;
+				UBits = 0;
+			}
+		}
+
 		//Figure out Image information
 		cachedTexture->mWidth = 1U << UBits;
 		cachedTexture->mHeight = 1U << VBits;
 		cachedTexture->mMipMapCount = std::max(Info.NumMips, 1);
+		cachedTexture->mBaseMip = BaseMip;
 
 		vk::ComponentMapping componentMapping;
 
@@ -1526,11 +1571,11 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 			Info.Load();
 		}
 
-
 		//Upload provided texture data.
 		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
 		{
-			const void* textureData = (void*)Info.Mips[BaseMip + i]->DataPtr;
+			const size_t currentMipIndex = cachedTexture->mBaseMip + i;
+			const void* textureData = (void*)Info.Mips[currentMipIndex]->DataPtr;
 
 			if (!textureData)
 			{

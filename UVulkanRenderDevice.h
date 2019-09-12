@@ -500,6 +500,7 @@ struct CachedTexture
 	uint32_t mWidth = 0;
 	uint32_t mHeight = 0;
 	uint32_t mMipMapCount = 0;
+	uint32_t mBaseMip = 0;
 };
 
 //Vertex only (for intermediate buffering)
@@ -695,7 +696,7 @@ public:
 	INT MaxLogTextureSize = 8;
 	UBOOL UseTripleBuffering = 0;
 	UBOOL EnableDebugLayers = 0;
-	UBOOL UseVSync = 0;
+	UBOOL UseVSync = 1;
 
 	//Misc
 	void LoadConfiguration(std::string filename);
