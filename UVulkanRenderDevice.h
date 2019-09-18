@@ -547,6 +547,13 @@ struct FGLMapDot
 	FLOAT v;
 };
 
+//Texture cache id flags
+enum
+{
+	TEX_CACHE_ID_FLAG_MASKED = 0x1,
+	TEX_CACHE_ID_FLAG_16BIT = 0x2
+};
+
 class UVulkanRenderDevice
 	: public URenderDevice
 {
@@ -697,6 +704,8 @@ public:
 	UBOOL UseTripleBuffering = 0;
 	UBOOL EnableDebugLayers = 0;
 	UBOOL UseVSync = 1;
+	UBOOL Use16BitTextures = 0;
+	UBOOL MaskedTextureHack = 0;
 
 	//Misc
 	void LoadConfiguration(std::string filename);

@@ -1,6 +1,11 @@
 #include "pch.h"
 #include "UVulkanRenderDevice.h"
 
+//Fixed texture cache ids
+#define TEX_CACHE_ID_UNUSED		0xFFFFFFFFFFFFFFFFULL
+#define TEX_CACHE_ID_NO_TEX		0xFFFFFFFF00000010ULL
+#define TEX_CACHE_ID_ALPHA_TEX	0xFFFFFFFF00000020ULL
+
 static std::map<std::string, std::string> mConfiguration;
 
 VKAPI_ATTR VkBool32 VKAPI_CALL DebugReportCallback(VkDebugReportFlagsEXT flags, VkDebugReportObjectTypeEXT objectType, uint64_t object, size_t location, int32_t messageCode, const char* layerPrefix, const char* message, void* userData)
@@ -206,6 +211,8 @@ void UVulkanRenderDevice::StaticConstructor()
 	AddBoolConfigParam(0, TEXT("UseTripleBuffering"), CPP_PROPERTY_LOCAL(UseTripleBuffering), 0);
 	AddBoolConfigParam(0, TEXT("EnableDebugLayers"), CPP_PROPERTY_LOCAL(EnableDebugLayers), 1);
 	AddBoolConfigParam(0, TEXT("UseVSync"), CPP_PROPERTY_LOCAL(UseVSync), 1);
+	AddBoolConfigParam(1, TEXT("Use16BitTextures"), CPP_PROPERTY_LOCAL(Use16BitTextures), 0);
+	AddBoolConfigParam(4, TEXT("MaskedTextureHack"), CPP_PROPERTY_LOCAL(MaskedTextureHack), 1);
 
 #undef CPP_PROPERTY_LOCAL
 #undef CPP_PROPERTY_LOCAL_DCV
@@ -840,7 +847,7 @@ UBOOL UVulkanRenderDevice::SetRes(INT NewX, INT NewY, INT NewColorBytes, UBOOL F
 	Log(info) << "NewColorBytes: " << NewColorBytes << std::endl;
 	Log(info) << "Fullscreen: " << Fullscreen << std::endl;
 
-	if (Viewport!=nullptr)
+	if (Viewport != nullptr)
 	{
 		//Get real viewport size
 		mNewX = Viewport->SizeX;
@@ -897,7 +904,7 @@ void UVulkanRenderDevice::Lock(FPlane InFlashScale, FPlane InFlashFog, FPlane Sc
 	mDevice->resetFences(1, &mDrawFences[mFrameIndex].get());
 
 	mDevice->acquireNextImageKHR(mSwapChain.get(), UINT64_MAX, mImageAvailableSemaphores[mFrameIndex].get(), vk::Fence(), &mImageIndex);
-	
+
 	mDescriptorSetIndex = 0;
 	mLastDescriptorSet = vk::DescriptorSet();
 	mPipelines[mFrameIndex].clear();
@@ -1031,13 +1038,13 @@ void UVulkanRenderDevice::Unlock(UBOOL Blit)
 	//Take the swap chain image and display it to the screen.
 	//if (Blit)
 	//{
-		vk::PresentInfoKHR presentInfo;
-		presentInfo.waitSemaphoreCount = 1;
-		presentInfo.pWaitSemaphores = &mRenderFinishedSemaphores[mFrameIndex].get();
-		presentInfo.swapchainCount = 1;
-		presentInfo.pSwapchains = &mSwapChain.get();
-		presentInfo.pImageIndices = &mImageIndex;
-		mQueue.presentKHR(&presentInfo);
+	vk::PresentInfoKHR presentInfo;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = &mRenderFinishedSemaphores[mFrameIndex].get();
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = &mSwapChain.get();
+	presentInfo.pImageIndices = &mImageIndex;
+	mQueue.presentKHR(&presentInfo);
 	//}
 
 	Log(info) << "UVulkanRenderDevice::Unlock" << std::endl;
@@ -1063,6 +1070,8 @@ void UVulkanRenderDevice::DrawGouraudPolygon(FSceneNode* Frame, FTextureInfo& In
 
 	BindTexture(0, 4, Info, PolyFlags);
 	UpdateDescriptors(true);
+	
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
 	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
 
 	Log(info) << "UVulkanRenderDevice::DrawGouraudPolygon" << std::endl;
@@ -1140,11 +1149,12 @@ void UVulkanRenderDevice::DrawTile(FSceneNode* Frame, FTextureInfo& Info, FLOAT 
 			.setSrcAccessMask(vk::AccessFlagBits::eTransferWrite)
 			.setDstAccessMask(vk::AccessFlagBits::eVertexAttributeRead);
 		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eVertexInput, vk::DependencyFlags(), 1, &uboBarrier, 0, nullptr, 0, nullptr);
+		
+		UpdateDescriptors(true);
 	}
 	commandBuffer.beginRenderPass(&mRenderPassBeginInfo, vk::SubpassContents::eInline);
 
-	
-	UpdateDescriptors(true);
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
 	UpdatePipline(PolyFlags, vk::PrimitiveTopology::eTriangleFan, 3, false);
 
 	commandBuffer.draw(6, 1, 0, 0);
@@ -1160,6 +1170,8 @@ void UVulkanRenderDevice::Draw2DLine(FSceneNode* Frame, FPlane Color, DWORD Line
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 
 	UpdateDescriptors(false);
+
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
 	UpdatePipline(0, vk::PrimitiveTopology::eTriangleFan, 2, false);
 
 	Log(info) << "UVulkanRenderDevice::Draw2DLine" << std::endl;
@@ -1173,6 +1185,8 @@ void UVulkanRenderDevice::Draw2DPoint(FSceneNode* Frame, FPlane Color, DWORD Lin
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 
 	UpdateDescriptors(false);
+
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
 	UpdatePipline(0, vk::PrimitiveTopology::eTriangleFan, 2, false);
 
 	Log(info) << "UVulkanRenderDevice::Draw2DPoint" << std::endl;
@@ -1372,11 +1386,37 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 
 	std::shared_ptr<CachedTexture> cachedTexture;
 
+	//PF_Memorized used internally to indicate 16-bit texture
+	PolyFlags &= ~PF_Memorized;
+
 	QWORD cacheId = Info.CacheID;
 	bool isDirty = false;
 
+	//Only attempt to alter texture cache id on certain textures
+	if ((cacheId & 0xFF) == 0xE0) 
+	{
+		//Alter texture cache id if masked texture hack is enabled and texture is masked
+		cacheId |= ((PolyFlags & PF_Masked) ? TEX_CACHE_ID_FLAG_MASKED : 0) & ((MaskedTextureHack) ? TEX_CACHE_ID_FLAG_MASKED : 0);
+
+		//Check for 16 bit texture option
+		if (Use16BitTextures)
+		{
+			if (Info.Palette && (Info.Palette[128].A == 255))
+			{
+				cacheId |= TEX_CACHE_ID_FLAG_16BIT;
+				PolyFlags |= PF_Memorized;
+			}
+		}
+	}
+
+	
+
+	const DWORD cacheIDSuffix = (cacheId & 0xFFFFFFFF00000000ULL)? (cacheId & 0x00000000FFFFFFFFULL) : (cacheId & 0x00000000FFFFFFFF);
+
+	Log(info) << "UVulkanRenderDevice::BindTexture cacheIDSuffix: "<< cacheIDSuffix << std::endl;
+
 	//Look for texture or create if it if we haven't seen it yet.
-	auto it = mCachedTextures.find(cacheId);
+	auto it = mCachedTextures.find(cacheIDSuffix);
 	if (it != mCachedTextures.end())
 	{
 		cachedTexture = it->second;
@@ -1387,7 +1427,7 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		isDirty = true;
 
 		cachedTexture = std::make_shared<CachedTexture>();
-		mCachedTextures[cacheId] = cachedTexture;
+		mCachedTextures[cacheIDSuffix] = cachedTexture;
 
 		// Figure out scaling info for the texture.
 		INT BaseMip = 0;
@@ -1439,6 +1479,11 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		cachedTexture->mHeight = 1U << VBits;
 		cachedTexture->mMipMapCount = std::max(Info.NumMips, 1);
 		cachedTexture->mBaseMip = BaseMip;
+
+		if (cachedTexture->mBaseMip >= Info.NumMips)
+		{
+			cachedTexture->mBaseMip = Info.NumMips - 1;
+		}
 
 		vk::ComponentMapping componentMapping;
 
@@ -1575,7 +1620,15 @@ void UVulkanRenderDevice::BindTexture(uint32_t index, uint32_t count, FTextureIn
 		for (size_t i = 0; i < cachedTexture->mMipMapCount; i++)
 		{
 			const size_t currentMipIndex = cachedTexture->mBaseMip + i;
-			const void* textureData = (void*)Info.Mips[currentMipIndex]->DataPtr;
+			Log(info) << "UVulkanRenderDevice::BindTexture currentMipIndex: " << currentMipIndex << std::endl;
+			const FMipmapBase* currentMip = Info.Mips[currentMipIndex];
+
+			if (!currentMip || ((uint32_t)currentMip == 0xffffffff))
+			{
+				break;
+			}
+
+			const void* textureData = (void*)currentMip->DataPtr;
 
 			if (!textureData)
 			{
@@ -1666,7 +1719,7 @@ void UVulkanRenderDevice::UpdateDescriptors(bool write)
 
 	auto& commandBuffer = mDrawCommandBuffers[mFrameIndex].get();
 
-	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, mPipelineLayout.get(), 0, 1, &mLastDescriptorSet, 0, nullptr);
+	
 
 	mDescriptorSetIndex++;
 
